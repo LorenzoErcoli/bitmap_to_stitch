@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8" />
+    <title>Bitmap → Stitch (PyScript)</title>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/modern-normalize/modern-normalize.css"
+    />
+    <link rel="stylesheet" href="https://pyscript.net/latest/pyscript.css" />
+    <script defer src="https://pyscript.net/latest/pyscript.js"></script>
+    <py-config>
+packages = ["numpy", "pillow"]
+    </py-config>
+    <style>
+      :root {
+        font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+        background: #f4f4f6;
+      }
+      body {
+        margin: 0;
+      }
+      main {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 2rem;
+      }
+      h1 {
+        margin-bottom: 0.5rem;
+        font-weight: 600;
+      }
+      p.lead {
+        margin-top: 0;
+        color: #555;
+      }
+      fieldset {
+        border: 1px solid #ccc;
+        border-radius: 0.5rem;
+        margin-bottom: 1.5rem;
+        padding: 1rem 1.25rem 1.5rem;
+        background: #fff;
+      }
+      legend {
+        padding: 0 0.5rem;
+        font-weight: 600;
+      }
+      .controls {
+        display: grid;
+        gap: 0.75rem 1rem;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        margin-top: 0.75rem;
+      }
+      .control {
+        display: flex;
+        flex-direction: column;
+        font-size: 0.9rem;
+      }
+      .control label {
+        font-weight: 600;
+        margin-bottom: 0.15rem;
+      }
+      .control input,
+      .control select {
+        padding: 0.35rem 0.45rem;
+        border-radius: 0.35rem;
+        border: 1px solid #bbb;
+        font-size: 0.95rem;
+      }
+      .actions {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        margin: 1.25rem 0;
+      }
+      button {
+        background: #006dff;
+        color: #fff;
+        border: none;
+        border-radius: 0.4rem;
+        padding: 0.6rem 1.5rem;
+        font-size: 1rem;
+        cursor: pointer;
+      }
+      button:hover {
+        background: #0053c7;
+      }
+      #download-link {
+        display: none;
+        font-weight: 600;
+        color: #0053c7;
+      }
+      #status {
+        padding: 0.75rem;
+        background: #fff;
+        border-radius: 0.5rem;
+        border: 1px solid #ddd;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Bitmap → Stitch (Web)</h1>
+      <p class="lead">
+        Carica un'immagine B/N per generare direttamente nel browser una
+        traccia SVG pronta per la macchina da ricamo.
+      </p>
+
+      <section>
+        <div class="control">
+          <label for="image">Bitmap</label>
+          <input
+            type="file"
+            id="image"
+            accept="image/*,.bmp,.png,.jpg,.jpeg,.gif,.webp"
+          />
+        </div>
+      </section>
+
+      <fieldset>
+        <legend>Impostazioni generali</legend>
+        <div class="controls">
+          <div class="control">
+            <label for="max-width">Max width (px)</label>
+            <input type="number" id="max-width" min="0" value="0" />
+          </div>
+          <div class="control">
+            <label for="threshold">Soglia (0-255)</label>
+            <input type="number" id="threshold" min="0" max="255" value="200" />
+          </div>
+          <div class="control">
+            <label for="max-points">Max points</label>
+            <input type="number" id="max-points" min="0" value="0" />
+          </div>
+          <div class="control">
+            <label for="scale">Scala SVG</label>
+            <input type="number" id="scale" step="0.1" value="1.0" />
+          </div>
+          <div class="control">
+            <label for="stroke-width">Stroke width</label>
+            <input type="number" id="stroke-width" step="0.1" value="0.3" />
+          </div>
+          <div class="control">
+            <label for="min-dist">Min dist</label>
+            <input type="number" id="min-dist" step="0.1" value="1.0" />
+          </div>
+          <div class="control">
+            <label for="reinsertion">Reinsertion rounds</label>
+            <input type="number" id="reinsertion" min="0" value="1" />
+          </div>
+          <div class="control">
+            <label for="chunk-size">Path chunk size</label>
+            <input type="number" id="chunk-size" min="0" value="5000" />
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Stile e ordinamento</legend>
+        <div class="controls">
+          <div class="control">
+            <label for="style">Stile</label>
+            <select id="style">
+              <option value="carpet" selected>Carpet (griglia uniforme)</option>
+              <option value="degrade">Degradé / Random</option>
+            </select>
+          </div>
+          <div class="control">
+            <label for="ordering">Ordering</label>
+            <select id="ordering">
+              <option value="scanline" selected>Scanline</option>
+              <option value="nearest">Nearest Neighbor</option>
+            </select>
+          </div>
+          <div class="control">
+            <label for="scanline-band">Scanline band (px)</label>
+            <input type="number" id="scanline-band" min="1" value="4" />
+          </div>
+          <div class="control">
+            <label for="serpentine">
+              <input type="checkbox" id="serpentine" checked />
+              Serpentina
+            </label>
+          </div>
+          <div class="control" data-group="carpet">
+            <label for="grid-cell">Grid cell (px)</label>
+            <input type="number" id="grid-cell" min="0" value="4" />
+          </div>
+          <div class="control" data-group="degrade">
+            <label for="degrade-drop">Drop probability (0-1)</label>
+            <input
+              type="number"
+              id="degrade-drop"
+              min="0"
+              max="1"
+              step="0.05"
+              value="0.3"
+            />
+          </div>
+          <div class="control" data-group="degrade">
+            <label for="degrade-jitter">Jitter (px)</label>
+            <input
+              type="number"
+              id="degrade-jitter"
+              min="0"
+              step="0.1"
+              value="1.0"
+            />
+          </div>
+          <div class="control" data-group="degrade">
+            <label for="degrade-seed">Seed (facoltativo)</label>
+            <input type="number" id="degrade-seed" />
+          </div>
+        </div>
+        <p class="lead" style="font-size: 0.85rem">
+          Le opzioni vengono applicate in base allo stile selezionato (carpet o
+          degradé).
+        </p>
+      </fieldset>
+
+      <div class="actions">
+        <button id="convert" py-click="convert_image">Genera SVG</button>
+        <a id="download-link" href="#" download="bitmap-stitch.svg"
+          >Scarica SVG</a
+        >
+      </div>
+
+      <p id="status">Carica un'immagine per iniziare.</p>
+    </main>
+
+    <script>
+      (function () {
+        const styleSelect = document.getElementById("style");
+        const carpetControls = document.querySelectorAll(
+          '[data-group="carpet"]'
+        );
+        const degradeControls = document.querySelectorAll(
+          '[data-group="degrade"]'
+        );
+
+        function refreshControls() {
+          const isCarpet = styleSelect.value === "carpet";
+          carpetControls.forEach(
+            (el) => (el.style.display = isCarpet ? "block" : "none")
+          );
+          degradeControls.forEach(
+            (el) => (el.style.display = isCarpet ? "none" : "block")
+          );
+        }
+
+        styleSelect.addEventListener("change", refreshControls);
+        refreshControls();
+      })();
+    </script>
+
+    <py-script src="app.py"></py-script>
+  </body>
+</html>
