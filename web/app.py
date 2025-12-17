@@ -1,6 +1,6 @@
 import io
 import math
-from js import Blob, document, Uint8Array, URL
+from js import Blob, document, Uint8Array, URL, console
 
 import numpy as np
 from PIL import Image
@@ -391,6 +391,7 @@ async def convert_image(event=None):
     download = document.getElementById("download-link")
     download.style.display = "none"
     status.innerText = "Elaborazione in corso..."
+    console.log("Genera SVG premuto")
 
     file_input = document.getElementById("image")
     if file_input.files.length == 0:

@@ -3,15 +3,12 @@
   <head>
     <meta charset="utf-8" />
     <title>Bitmap → Stitch (PyScript)</title>
-    <link
-      rel="stylesheet"
-      href="https://cdn.jsdelivr.net/npm/modern-normalize/modern-normalize.css"
-    />
-    <link rel="stylesheet" href="https://pyscript.net/latest/pyscript.css" />
     <script defer src="https://pyscript.net/latest/pyscript.js"></script>
-    <py-config>
-packages = ["numpy", "pillow"]
-    </py-config>
+    <script type="py-config">
+      {
+        "packages": ["numpy", "pillow"]
+      }
+    </script>
     <style>
       :root {
         font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
@@ -252,6 +249,6 @@ packages = ["numpy", "pillow"]
       })();
     </script>
 
-    <py-script src="app.py"></py-script>
+    <script type="py" src="app.py"></script>
   </body>
 </html>
