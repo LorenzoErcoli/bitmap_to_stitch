@@ -1,0 +1,75 @@
+{
+  "id": "base_raso_densit_40_verticale",
+  "source": "items\\base_raso_densit_40_verticale\\source.dst",
+  "tags": {
+    "material": [],
+    "object": [],
+    "source": "dst_import"
+  },
+  "stitch_profile": {
+    "avg_stitch_length_mm": 2.698933865520761,
+    "max_stitch_length_mm": 3.612478373637688,
+    "directionality_histogram_deg": [
+      0,
+      0,
+      0,
+      175,
+      0,
+      0,
+      0,
+      0,
+      30,
+      144,
+      0,
+      0
+    ],
+    "layers": [
+      {
+        "color": 0,
+        "stitch_count": 352,
+        "path_length_mm": 941.9279190667456,
+        "avg_stitch_length_mm": 2.698933865520761,
+        "hull_area_mm2": 230.46,
+        "bounds": {
+          "minx": -15.0,
+          "miny": -15.4,
+          "maxx": 0.0,
+          "maxy": 0.0
+        },
+        "density_stitches_per_mm2": 1.5273800225635685,
+        "angle_histogram_deg": [
+          0,
+          0,
+          0,
+          175,
+          0,
+          0,
+          0,
+          0,
+          30,
+          144,
+          0,
+          0
+        ],
+        "classification": {
+          "type": "unknown",
+          "confidence": 0.3,
+          "reason": "Metrics outside heuristics (density 1.53, avg 2.70 mm, bins 3, alignment 0.50)."
+        }
+      }
+    ],
+    "layer_classification_summary": {
+      "unknown": 1
+    }
+  },
+  "notes": [
+    "Derived automatically from DST data.",
+    "Parameters estimated via pyembroidery + numpy pipeline."
+  ],
+  "examples": [
+    "items\\base_raso_densit_40_verticale\\preview.png",
+    "items\\base_raso_densit_40_verticale\\stitch_ir.json"
+  ],
+  "label": "BASE RASO DENSIT\u00e0 40 VERTICALE",
+  "description": "Auto import BASE RASO DENSIT\u00e0 40 VERTICALE"
+}

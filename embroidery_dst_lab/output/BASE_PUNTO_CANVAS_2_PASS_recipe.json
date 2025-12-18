@@ -1,0 +1,50 @@
+{
+  "id": "RECIPE_BASE_PUNTO_CANVAS_2_PASS",
+  "source": "embroidery_dst_lab\\output\\BASE_PUNTO_CANVAS_2_PASS_ir.json",
+  "tags": {
+    "material": [],
+    "object": [],
+    "source": "dst_import"
+  },
+  "stitch_profile": {
+    "avg_stitch_length_mm": 2.521149149949104,
+    "max_stitch_length_mm": 6.400000000000091,
+    "directionality_histogram_deg": [
+      0,
+      0,
+      147278,
+      148332,
+      0,
+      211,
+      147700,
+      0,
+      0,
+      73850,
+      0,
+      147700
+    ],
+    "layers": [
+      {
+        "color": 0,
+        "stitch_count": 665166,
+        "path_length_mm": 1678047.5382934422,
+        "hull_area_mm2": 785572.8,
+        "bounds": {
+          "minx": -350.3,
+          "miny": -560.6,
+          "maxx": 350.3,
+          "maxy": 560.7
+        },
+        "density_stitches_per_mm2": 0.8467273815997702
+      }
+    ]
+  },
+  "notes": [
+    "Derived automatically from DST data.",
+    "Parameters estimated via pyembroidery + numpy pipeline."
+  ],
+  "examples": [
+    "embroidery_dst_lab\\output\\BASE_PUNTO_CANVAS_2_PASS_preview.png",
+    "embroidery_dst_lab\\output\\BASE_PUNTO_CANVAS_2_PASS_ir.json"
+  ]
+}

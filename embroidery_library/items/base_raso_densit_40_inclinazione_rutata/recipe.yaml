@@ -1,0 +1,61 @@
+id: base_raso_densit_40_inclinazione_rutata
+source: items\base_raso_densit_40_inclinazione_rutata\source.dst
+tags:
+  material: []
+  object: []
+  source: dst_import
+stitch_profile:
+  avg_stitch_length_mm: 2.5984127428391735
+  max_stitch_length_mm: 4.237924020083418
+  directionality_histogram_deg:
+  - 0
+  - 0
+  - 102
+  - 123
+  - 9
+  - 0
+  - 0
+  - 5
+  - 111
+  - 120
+  - 3
+  - 0
+  layers:
+  - color: 0
+    stitch_count: 476
+    path_length_mm: 1229.049227362929
+    avg_stitch_length_mm: 2.5984127428391735
+    hull_area_mm2: 233.91
+    bounds:
+      minx: -15.0
+      miny: -15.4
+      maxx: 0.2
+      maxy: 0.0
+    density_stitches_per_mm2: 2.034970715232354
+    angle_histogram_deg:
+    - 0
+    - 0
+    - 102
+    - 123
+    - 9
+    - 0
+    - 0
+    - 5
+    - 111
+    - 120
+    - 3
+    - 0
+    classification:
+      type: tatami
+      confidence: 0.7
+      reason: High density (2.03) with multi-directional coverage (4 bins).
+  layer_classification_summary:
+    tatami: 1
+notes:
+- Derived automatically from DST data.
+- Parameters estimated via pyembroidery + numpy pipeline.
+examples:
+- items\base_raso_densit_40_inclinazione_rutata\preview.png
+- items\base_raso_densit_40_inclinazione_rutata\stitch_ir.json
+label: "BASE RASO DENSIT\xE0 40 INCLINAZIONE RUTATA"
+description: "Auto import BASE RASO DENSIT\xE0 40 INCLINAZIONE RUTATA"

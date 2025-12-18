@@ -1,0 +1,23 @@
+{
+  "id": "base_raso_densit_40_verticale",
+  "stitch_count": 352,
+  "color_layers": 1,
+  "classification_summary": {
+    "unknown": 1
+  },
+  "paths": {
+    "dst": "items\\base_raso_densit_40_verticale\\source.dst",
+    "stitch_ir": "items\\base_raso_densit_40_verticale\\stitch_ir.json",
+    "stats": "items\\base_raso_densit_40_verticale\\stats.json",
+    "recipe": "items\\base_raso_densit_40_verticale\\recipe.yaml",
+    "preview": "items\\base_raso_densit_40_verticale\\preview.png"
+  },
+  "generated_at": "2025-12-18T16:06:59+00:00",
+  "bounds_mm": {
+    "minx": -15.0,
+    "miny": -15.4,
+    "maxx": 0.0,
+    "maxy": 0.0
+  },
+  "description": "Auto import BASE RASO DENSIT\u00e0 40 VERTICALE"
+}
