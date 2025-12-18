@@ -1,7 +1,12 @@
 const statusEl = document.getElementById("status");
 const downloadEl = document.getElementById("download-link");
+const multiDownloadEl = document.getElementById("download-multi");
+const colorDownloadsEl = document.getElementById("color-downloads");
 const convertBtn = document.getElementById("convert");
 let pyodideReady = null;
+let colorDownloadUrls = [];
+let monoDownloadUrl = null;
+let multiDownloadUrl = null;
 
 async function initPyodide() {
   if (!pyodideReady) {
@@ -45,12 +50,98 @@ function readOptions() {
     degrade_drop: num("degrade-drop", 0.3),
     degrade_jitter: num("degrade-jitter", 1.0),
     degrade_seed: val("degrade-seed") || null,
+    color_count: num("color-count", 2, parseInt),
   };
+}
+
+function resetPrimaryDownloads() {
+  if (downloadEl) {
+    downloadEl.style.display = "none";
+  }
+  if (multiDownloadEl) {
+    multiDownloadEl.style.display = "none";
+  }
+  if (monoDownloadUrl) {
+    URL.revokeObjectURL(monoDownloadUrl);
+    monoDownloadUrl = null;
+  }
+  if (multiDownloadUrl) {
+    URL.revokeObjectURL(multiDownloadUrl);
+    multiDownloadUrl = null;
+  }
+}
+
+function resetColorDownloads() {
+  colorDownloadUrls.forEach((url) => URL.revokeObjectURL(url));
+  colorDownloadUrls = [];
+  if (colorDownloadsEl) {
+    colorDownloadsEl.innerHTML = "";
+    colorDownloadsEl.style.display = "none";
+  }
+}
+
+function renderColorDownloads(colors, baseName) {
+  resetColorDownloads();
+  if (!colorDownloadsEl || !Array.isArray(colors) || colors.length === 0) {
+    return;
+  }
+
+  const cards = [];
+  colors.forEach((info, idx) => {
+    if (!info || !info.svg) {
+      return;
+    }
+    const card = document.createElement("div");
+    card.className = "color-card";
+
+    const infoBox = document.createElement("div");
+    infoBox.className = "color-info";
+    const swatch = document.createElement("span");
+    swatch.className = "color-swatch";
+    swatch.style.backgroundColor = info.color || "#000000";
+    infoBox.appendChild(swatch);
+
+    const label = document.createElement("span");
+    label.textContent = `${info.color || "#000000"} - ${info.final_points} pts`;
+    infoBox.appendChild(label);
+    card.appendChild(infoBox);
+
+    const link = document.createElement("a");
+    link.textContent = "Download";
+    link.className = "color-download-link";
+    const url = URL.createObjectURL(
+      new Blob([info.svg], { type: "image/svg+xml" })
+    );
+    colorDownloadUrls.push(url);
+    link.href = url;
+    const suffix = (info.color || "").replace("#", "") || `color-${idx + 1}`;
+    const base =
+      baseName && baseName.trim().length > 0 ? baseName.trim() : "stitch";
+    link.download = `${base}-${suffix}.svg`;
+
+    card.appendChild(link);
+    cards.push(card);
+  });
+
+  if (cards.length === 0) {
+    return;
+  }
+
+  const fragment = document.createDocumentFragment();
+  const heading = document.createElement("p");
+  heading.className = "color-downloads-title";
+  heading.textContent = "Download SVG per colore";
+  fragment.appendChild(heading);
+  cards.forEach((card) => fragment.appendChild(card));
+
+  colorDownloadsEl.appendChild(fragment);
+  colorDownloadsEl.style.display = "flex";
 }
 
 async function handleConvert() {
   console.log("Genera SVG premuto");
-  downloadEl.style.display = "none";
+  resetPrimaryDownloads();
+  resetColorDownloads();
   const statusHistory = [];
   const pushStatus = (msg) => {
     statusHistory.push(msg);
@@ -98,12 +189,28 @@ async function handleConvert() {
     const summary = result.summary;
     console.log("SVG preview:", svgStr.slice(0, 120));
 
-    const blob = new Blob([svgStr], { type: "image/svg+xml" });
-    const url = URL.createObjectURL(blob);
-    downloadEl.href = url;
-    downloadEl.download = `${file.name.replace(/\.[^.]+$/, "") || "stitch"}.svg`;
+    const baseName = file.name.replace(/\.[^.]+$/, "") || "stitch";
+
+    const multiBlob = new Blob([svgStr], { type: "image/svg+xml" });
+    const multiUrl = URL.createObjectURL(multiBlob);
+    multiDownloadUrl = multiUrl;
+    if (multiDownloadEl) {
+      multiDownloadEl.href = multiUrl;
+      multiDownloadEl.download = `${baseName}-multi.svg`;
+      multiDownloadEl.style.display = "inline-block";
+    }
+
+    const monoSvg =
+      typeof result.mono_svg === "string" && result.mono_svg.trim().length > 0
+        ? result.mono_svg
+        : svgStr;
+    const monoBlob = new Blob([monoSvg], { type: "image/svg+xml" });
+    monoDownloadUrl = URL.createObjectURL(monoBlob);
+    downloadEl.href = monoDownloadUrl;
+    downloadEl.download = `${baseName}-mono.svg`;
     downloadEl.style.display = "inline-block";
 
+    renderColorDownloads(result.colors || [], baseName);
     pushStatus(summary);
   } catch (error) {
     console.error("Errore durante la conversione:", error);

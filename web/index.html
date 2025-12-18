@@ -80,10 +80,56 @@
       button:hover {
         background: #0053c7;
       }
-      #download-link {
+      #download-link,
+      #download-multi {
         display: none;
         font-weight: 600;
         color: #0053c7;
+        text-decoration: none;
+      }
+      #download-link:hover,
+      #download-multi:hover {
+        text-decoration: underline;
+      }
+      .color-downloads {
+        display: none;
+        flex-direction: column;
+        gap: 0.5rem;
+        margin: 0.75rem 0 1.5rem;
+      }
+      .color-downloads-title {
+        margin: 0;
+        font-weight: 600;
+        color: #333;
+      }
+      .color-card {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: #fff;
+        border: 1px solid #ddd;
+        border-radius: 0.5rem;
+        padding: 0.45rem 0.75rem;
+      }
+      .color-info {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-weight: 600;
+      }
+      .color-swatch {
+        width: 1.1rem;
+        height: 1.1rem;
+        border-radius: 0.2rem;
+        border: 1px solid #ccc;
+      }
+      .color-download-link {
+        color: #0053c7;
+        font-weight: 600;
+        text-decoration: none;
+      }
+      .color-download-link:hover {
+        text-decoration: underline;
       }
       #status {
         padding: 0.75rem;
@@ -97,8 +143,8 @@
     <main>
       <h1>Bitmap → Stitch (Web)</h1>
       <p class="lead">
-        Carica un'immagine B/N per generare direttamente nel browser una
-        traccia SVG pronta per la macchina da ricamo.
+        Carica un'immagine (anche a colori) per generare direttamente nel
+        browser tracce SVG pronte per la macchina da ricamo, una per ogni tinta.
       </p>
 
       <section>
@@ -122,6 +168,10 @@
           <div class="control">
             <label for="threshold">Soglia (0-255)</label>
             <input type="number" id="threshold" min="0" max="255" value="200" />
+          </div>
+          <div class="control">
+            <label for="color-count">Numero colori</label>
+            <input type="number" id="color-count" min="1" max="12" value="2" />
           </div>
           <div class="control">
             <label for="max-points">Max points</label>
@@ -216,9 +266,14 @@
       <div class="actions">
         <button id="convert">Genera SVG</button>
         <a id="download-link" href="#" download="bitmap-stitch.svg"
-          >Scarica SVG</a
+          >Scarica SVG (monocolore)</a
+        >
+        <a id="download-multi" href="#" download="bitmap-stitch-multi.svg"
+          >Scarica SVG multicolore</a
         >
       </div>
+
+      <div id="color-downloads" class="color-downloads"></div>
 
       <p id="status">Carica un'immagine per iniziare.</p>
     </main>

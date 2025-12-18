@@ -14,8 +14,10 @@ def emit_status(message):
         status_callback(str(message))
 
 
-def load_points_from_bytes(data, max_width=None, threshold=200):
-    img = Image.open(io.BytesIO(data)).convert("L")
+def load_points_grouped_from_bytes(
+    data, max_width=None, threshold=200, color_count=2
+):
+    img = Image.open(io.BytesIO(data)).convert("RGBA")
 
     if max_width is not None and max_width > 0:
         w, h = img.size
@@ -25,13 +27,50 @@ def load_points_from_bytes(data, max_width=None, threshold=200):
             new_h = int(h * scale)
             img = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
 
-    arr = np.array(img)
-    ys, xs = np.where(arr < threshold)
-    points = list(zip(xs.tolist(), ys.tolist()))
-    emit_status(
-        f"Lettura bitmap completata: {img.size[0]}x{img.size[1]} px, punti neri = {len(points)}"
+    luminance = np.array(img.convert("L"))
+    mask = luminance < int(threshold)
+    if "A" in img.getbands():
+        alpha = np.array(img.getchannel("A"))
+        mask &= alpha > 0
+
+    if not np.any(mask):
+        emit_status(
+            f"Nessun pixel valido trovato con soglia={threshold}; aumenta la soglia o usa un'immagine diversa."
+        )
+        return {}, img.size
+
+    rgb_img = img.convert("RGB")
+    palette_colors = max(1, int(color_count))
+    quantized = rgb_img.convert(
+        "P", palette=Image.ADAPTIVE, colors=palette_colors
     )
-    return points, img.size
+    palette = quantized.getpalette()
+    arr = np.array(quantized)
+
+    ys, xs = np.where(mask)
+    indexes = arr[ys, xs]
+    unique_idxs = np.unique(indexes)
+
+    def idx_to_hex(idx):
+        base = idx * 3
+        r = palette[base]
+        g = palette[base + 1]
+        b = palette[base + 2]
+        return f"#{r:02X}{g:02X}{b:02X}"
+
+    color_points = {}
+    for idx in unique_idxs.tolist():
+        color_hex = idx_to_hex(int(idx))
+        color_mask = indexes == idx
+        px = xs[color_mask]
+        py = ys[color_mask]
+        color_points[color_hex] = list(zip(px.tolist(), py.tolist()))
+
+    emit_status(
+        "Lettura bitmap completata: "
+        f"{img.size[0]}x{img.size[1]} px, colori attivi={len(color_points)}"
+    )
+    return color_points, img.size
 
 
 def subsample_points(points, max_points=None):
@@ -231,121 +270,139 @@ def try_reinsert_points(path, standby, min_dist_px):
     return new_path, still_leftover
 
 
-def build_svg_single_path(points, scale=1.0, stroke_width=0.3, chunk_size=0):
+def chunk_path(points, chunk_size):
     if not points:
+        return []
+    if not chunk_size or chunk_size <= 0 or len(points) <= chunk_size:
+        return [points]
+    chunk_size = int(chunk_size)
+    chunks = []
+    n = len(points)
+    idx = 0
+    while idx < n:
+        end = min(idx + chunk_size, n)
+        if idx == 0:
+            chunks.append(points[idx:end])
+        else:
+            chunks.append([points[idx - 1]] + points[idx:end])
+        idx = end
+    return chunks
+
+
+def build_svg_for_paths(
+    color_paths, image_size, scale=1.0, stroke_width=0.3, chunk_size=0
+):
+    if not color_paths:
         return ""
-    scaled = [(x * scale, y * scale) for (x, y) in points]
-    max_x = max(p[0] for p in scaled)
-    max_y = max(p[1] for p in scaled)
-    width = max_x + 10
-    height = max_y + 10
-
-    def chunk_iter(data, size):
-        if size <= 0 or len(data) <= size:
-            yield data
-            return
-        n = len(data)
-        idx = 0
-        size = int(size)
-        while idx < n:
-            end = min(idx + size, n)
-            if idx == 0:
-                yield data[idx:end]
-            else:
-                yield [data[idx - 1]] + data[idx:end]
-            idx += size
-
-    path_elems = []
-    for chunk in chunk_iter(scaled, int(chunk_size)):
-        if not chunk:
+    scale = float(scale) if scale else 1.0
+    stroke_width = float(stroke_width) if stroke_width else 0.3
+    chunk_size = int(chunk_size) if chunk_size else 0
+    width = max(image_size[0] * scale + 10.0, 10.0)
+    height = max(image_size[1] * scale + 10.0, 10.0)
+    groups = []
+    for color_hex, path in color_paths:
+        if not path:
             continue
-        cmds = []
-        first = True
-        for (x, y) in chunk:
-            if first:
-                cmds.append(f"M {x:.2f} {y:.2f}")
-                first = False
-            else:
-                cmds.append(f"L {x:.2f} {y:.2f}")
-        d_attr = " ".join(cmds)
-        path_elems.append(
-            f'  <path d="{d_attr}" fill="none" stroke="black" stroke-width="{stroke_width}"/>'
-        )
-
-    svg = f"""<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg"
-     width="{width:.2f}" height="{height:.2f}"
-     viewBox="0 0 {width:.2f} {height:.2f}">
-{chr(10).join(path_elems)}
-</svg>
-"""
+        chunked = chunk_path(path, chunk_size)
+        path_elems = []
+        for chunk in chunked:
+            if not chunk:
+                continue
+            cmds = []
+            first = True
+            for (x, y) in chunk:
+                sx = x * scale
+                sy = y * scale
+                if first:
+                    cmds.append(f"M {sx:.2f} {sy:.2f}")
+                    first = False
+                else:
+                    cmds.append(f"L {sx:.2f} {sy:.2f}")
+            d_attr = " ".join(cmds)
+            path_elems.append(
+                f'    <path d="{d_attr}" fill="none" stroke="{color_hex}" stroke-width="{stroke_width}"/>'
+            )
+        if path_elems:
+            groups.append(
+                f'  <g data-color="{color_hex}">\n'
+                + "\n".join(path_elems)
+                + "\n  </g>"
+            )
+    if not groups:
+        return ""
+    svg = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<svg xmlns="http://www.w3.org/2000/svg"\n'
+        f'     width="{width:.2f}" height="{height:.2f}"\n'
+        f'     viewBox="0 0 {width:.2f} {height:.2f}">\n'
+        + "\n".join(groups)
+        + "\n</svg>\n"
+    )
     return svg
 
 
-def run_pipeline(image_bytes, opts):
-    emit_status("=== Inizio nuova conversione ===")
-    max_width = opts["max_width"] if opts["max_width"] > 0 else None
-    points, size = load_points_from_bytes(
-        image_bytes, max_width=max_width, threshold=opts["threshold"]
-    )
-    if not points:
-        raise ValueError("Nessun pixel nero trovato con la soglia corrente.")
+def process_color_points(
+    points, opts, image_size, color_hex, color_idx=0, seed_base=None
+):
+    working = points[:]
+    initial_points = len(working)
+    emit_status(f"{color_hex}: punti iniziali={initial_points}")
 
-    initial_points = len(points)
+    if not working:
+        return {
+            "color": color_hex,
+            "path": [],
+            "initial_points": 0,
+            "final_points": 0,
+            "discarded_points": 0,
+        }
+
     if opts["style"] == "degrade":
-        seed = int(opts["degrade_seed"]) if opts["degrade_seed"] else None
+        seed = (seed_base + color_idx) if seed_base is not None else None
         emit_status(
-            "Applico effetti degradé: "
-            f"drop={opts['degrade_drop']:.2f}, jitter={opts['degrade_jitter']:.2f}"
+            f"{color_hex}: applico stile degrade (drop={opts['degrade_drop']:.2f}, jitter={opts['degrade_jitter']:.2f})"
         )
-        points = apply_random_degrade_effects(
-            points,
+        working = apply_random_degrade_effects(
+            working,
             drop_probability=opts["degrade_drop"],
             jitter=opts["degrade_jitter"],
-            image_size=size,
+            image_size=image_size,
             seed=seed,
         )
     elif opts["grid_cell_size"] > 1:
-        emit_status(f"Regolarizzo la griglia (cell={opts['grid_cell_size']} px)...")
-        points = regularize_points_on_grid(points, opts["grid_cell_size"])
+        emit_status(f"{color_hex}: regolarizzo griglia (cell={opts['grid_cell_size']} px)")
+        working = regularize_points_on_grid(working, opts["grid_cell_size"])
+
+    max_points = opts.get("max_points", 0)
+    if max_points > 0 and len(working) > max_points:
+        before = len(working)
+        working = subsample_points(working, max_points=max_points)
         emit_status(
-            f"Punti dopo griglia: {len(points)} "
-            f"(prima {initial_points}, riduzione {initial_points - len(points)})"
+            f"{color_hex}: limito max-points a {len(working)} (prima {before})"
         )
 
-    if opts["max_points"] > 0:
-        before = len(points)
-        points = subsample_points(points, max_points=opts["max_points"])
-        emit_status(
-            f"Limite max-points: {len(points)} rimanenti "
-            f"(prima {before}, riduzione {before - len(points)})"
-        )
-
-    if not points:
-        raise ValueError("Tutti i punti sono stati filtrati dai parametri attuali.")
+    if not working:
+        return {
+            "color": color_hex,
+            "path": [],
+            "initial_points": initial_points,
+            "final_points": 0,
+            "discarded_points": 0,
+        }
 
     if opts["ordering"] == "scanline":
         ordered = order_points_scanline(
-            points,
+            working,
             band_height=opts["scanline_band"],
             serpentine=opts["serpentine"],
         )
-        emit_status(
-            "Ordering scanline completato "
-            f"(band={opts['scanline_band']} px, serpentine={opts['serpentine']})"
-        )
     else:
-        ordered = order_points_nearest_neighbor(points)
-        emit_status("Ordering nearest-neighbor completato")
+        ordered = order_points_nearest_neighbor(working)
 
     final_path = ordered
     discarded = []
     if opts["min_dist"] > 0 and opts["scale"] > 0:
         min_dist_px = opts["min_dist"] / opts["scale"]
-        emit_status(
-            f"Filtro min-dist rigido: {opts['min_dist']} unità "
-            f"(≈ {min_dist_px:.2f} px)"
-        )
         path_filtered, standby = filter_with_min_dist_and_standby(
             ordered, min_dist_px
         )
@@ -358,36 +415,129 @@ def run_pipeline(image_bytes, opts):
                 current_path, current_standby, min_dist_px
             )
             current_standby = leftover
-            emit_status(
-                f"Reinserimento round completato: path={len(current_path)}, "
-                f"standby rimasti={len(current_standby)}"
-            )
         final_path = current_path
         discarded = current_standby
 
-    if not final_path:
-        raise ValueError("Il percorso finale è vuoto; riduci il min-dist o cambia stile.")
+    return {
+        "color": color_hex,
+        "path": final_path,
+        "initial_points": initial_points,
+        "final_points": len(final_path),
+        "discarded_points": len(discarded),
+    }
 
-    svg_str = build_svg_single_path(
-        final_path,
+
+def run_pipeline(image_bytes, opts):
+    emit_status("=== Inizio nuova conversione ===")
+    max_width = opts["max_width"] if opts["max_width"] > 0 else None
+    color_count = max(1, int(opts.get("color_count", 1)))
+    color_points, size = load_points_grouped_from_bytes(
+        image_bytes,
+        max_width=max_width,
+        threshold=opts["threshold"],
+        color_count=color_count,
+    )
+    if not color_points:
+        raise ValueError(
+            "Nessun pixel utile trovato con la soglia/colori correnti. Prova ad abbassare la soglia o aumentare i colori."
+        )
+
+    emit_status(f"Colori trovati: {len(color_points)} (richiesti {color_count})")
+    base_seed = None
+    if opts["style"] == "degrade":
+        seed_raw = opts.get("degrade_seed")
+        if seed_raw not in (None, ""):
+            try:
+                base_seed = int(seed_raw)
+            except (TypeError, ValueError):
+                base_seed = None
+
+    color_results = []
+    for idx, color_hex in enumerate(sorted(color_points.keys())):
+        result = process_color_points(
+            color_points[color_hex],
+            opts,
+            size,
+            color_hex,
+            color_idx=idx,
+            seed_base=base_seed,
+        )
+        color_results.append(result)
+
+    final_paths = [
+        (res["color"], res["path"]) for res in color_results if res["path"]
+    ]
+    if not final_paths:
+        raise ValueError(
+            "Nessun percorso finale disponibile; riduci il min-dist o modifica le impostazioni."
+        )
+
+    svg_str = build_svg_for_paths(
+        final_paths,
+        size,
         scale=opts["scale"],
         stroke_width=opts["stroke_width"],
         chunk_size=opts["chunk_size"],
     )
     emit_status(
-        "SVG pronto: "
-        f"path chunk={opts['chunk_size']} | punti finali={len(final_path)}"
+        f"SVG combinato pronto: colori attivi={len(final_paths)}, chunk={opts['chunk_size']}"
     )
-    summary = (
-        f"Punti iniziali: {len(points)} | "
-        f"Punti finali: {len(final_path)} | "
-        f"Scartati: {len(discarded)}"
-    )
-    return svg_str, summary
+
+    mono_svg = ""
+    if final_paths:
+        mono_path = []
+        for _, path in final_paths:
+            mono_path.extend(path)
+        if mono_path:
+            mono_svg = build_svg_for_paths(
+                [("#000000", mono_path)],
+                size,
+                scale=opts["scale"],
+                stroke_width=opts["stroke_width"],
+                chunk_size=opts["chunk_size"],
+            )
+
+    color_payload = []
+    for res in color_results:
+        single_svg = (
+            build_svg_for_paths(
+                [(res["color"], res["path"])],
+                size,
+                scale=opts["scale"],
+                stroke_width=opts["stroke_width"],
+                chunk_size=opts["chunk_size"],
+            )
+            if res["path"]
+            else ""
+        )
+        color_payload.append(
+            {
+                "color": res["color"],
+                "initial_points": res["initial_points"],
+                "final_points": res["final_points"],
+                "discarded_points": res["discarded_points"],
+                "svg": single_svg,
+            }
+        )
+
+    summary_lines = [
+        f"Colori elaborati: {len(final_paths)} su {len(color_results)} totali"
+    ]
+    for res in color_results:
+        summary_lines.append(
+            f"{res['color']} -> iniziali {res['initial_points']} | finali {res['final_points']} | scartati {res['discarded_points']}"
+        )
+    summary = "\n".join(summary_lines)
+    return svg_str, summary, color_payload, mono_svg
 
 
 def run_pipeline_browser(image_bytes, options):
     if not isinstance(image_bytes, (bytes, bytearray)):
         image_bytes = bytes(image_bytes)
-    svg_str, summary = run_pipeline(image_bytes, options)
-    return {"svg": svg_str, "summary": summary}
+    multi_svg, summary, colors, mono_svg = run_pipeline(image_bytes, options)
+    return {
+        "svg": multi_svg,
+        "mono_svg": mono_svg,
+        "summary": summary,
+        "colors": colors,
+    }
