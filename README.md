@@ -36,7 +36,7 @@ Per l'analisi dei file `.dst` trovi una pipeline autonoma nella cartella `embroi
    - `python embroidery_dst_lab/src/analyze_stats.py --ir output/test_stitch_ir.json`
    - `python embroidery_dst_lab/src/ir_to_recipe.py --stats output/test_stats.json`
 
-Lo step `analyze_stats.py` ora copre anche la **FASE 7** con un riconoscimento euristico Run/Satin/Tatami per ogni layer (densità, lunghezza media e direzioni). Insieme otterrai: JSON IR con punti/color-change, statistiche tecniche (lunghezze, densità per layer, istogrammi angolari, guess tipo stitch), preview PNG e una Recipe Card JSON pronta per l'archiviazione delle lavorazioni.
+Lo step `analyze_stats.py` ora copre anche la **FASE 7** con un riconoscimento euristico multi-classe per ogni layer (run, travel, satin_light, satin_dense, tatami, detail) basato su densità, lunghezze, deviazione standard e direzioni. Insieme otterrai: JSON IR con punti/color-change, statistiche tecniche (lunghezze, densità per layer, istogrammi angolari, guess tipo stitch), preview PNG e una Recipe Card JSON pronta per l'archiviazione delle lavorazioni.
 
 ### FASE 8 — Esportazione nella Library per l'AI Planner
 
@@ -54,6 +54,7 @@ Lo script:
 - copia il DST nella cartella item
 - rigenera IR/stats/preview/recipe
 - salva `recipe.json` + `recipe.yaml` con summary dei layer e copia il nome file DST come label
+- se non passi `--description` costruisce in automatico una descrizione testuale dalle proprietà dei layer (classe, densità, lunghezza media)
 - se passi `--description` aggiunge una nota testuale sfruttabile dal planner/AI
 - crea `manifest.json` per il singolo item
 - aggiorna `embroidery_library/library_index.json` così il Planner/AI può catalogare tutto via CLI.
@@ -78,4 +79,4 @@ python embroidery_dst_lab/src/planner_query.py \
   --max-results 3
 ```
 
-Il tool legge `embroidery_library/library_index.json`, filtra per classificazione (`--require-class` ripetibile) e fa keyword search su label+descrizione restituendo i match più pertinenti con percorsi a recipe/preview. Usa `--json` se vuoi l'output in formato machine-friendly.
+Il tool legge `embroidery_library/library_index.json`, filtra per classificazione (`--require-class` ripetibile), per range di stitch (`--min-stitches/--max-stitches`) e per densità media (`--min-density/--max-density`), poi fa keyword search su label+descrizione restituendo i match più pertinenti con percorsi a recipe/preview. Usa `--json` se vuoi l'output in formato machine-friendly.

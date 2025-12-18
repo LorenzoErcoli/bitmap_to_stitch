@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Convert a DST file into a stitch intermediate representation (IR)."""
+"""Convert a DST file to a Stitch IR JSON."""
 
 from __future__ import annotations
 
@@ -14,9 +14,7 @@ DST_UNIT_MM = 0.1
 
 
 def dst_to_ir(dst_path: Path) -> Dict[str, Any]:
-    """Return a structured JSON-serialisable representation of a DST file."""
     pattern = read(str(dst_path))
-
     stitches: List[Dict[str, Any]] = []
     color_index = 0
 
@@ -24,8 +22,6 @@ def dst_to_ir(dst_path: Path) -> Dict[str, Any]:
         if cmd == COLOR_CHANGE:
             color_index += 1
         elif cmd == END:
-            # pyembroidery still keeps the END instruction inside stitches,
-            # but we avoid appending a bogus stitch entry.
             continue
 
         stitches.append(
@@ -38,15 +34,15 @@ def dst_to_ir(dst_path: Path) -> Dict[str, Any]:
             }
         )
 
-    if not stitches:
-        bounds = {"minx": 0.0, "miny": 0.0, "maxx": 0.0, "maxy": 0.0}
-    else:
+    if stitches:
         bounds = {
-            "minx": min(s["x"] for s in stitches),
-            "miny": min(s["y"] for s in stitches),
-            "maxx": max(s["x"] for s in stitches),
-            "maxy": max(s["y"] for s in stitches),
+            "minx": min(pt["x"] for pt in stitches),
+            "miny": min(pt["y"] for pt in stitches),
+            "maxx": max(pt["x"] for pt in stitches),
+            "maxy": max(pt["y"] for pt in stitches),
         }
+    else:
+        bounds = {"minx": 0.0, "miny": 0.0, "maxx": 0.0, "maxy": 0.0}
 
     return {
         "source": str(dst_path),
@@ -60,19 +56,15 @@ def dst_to_ir(dst_path: Path) -> Dict[str, Any]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Convert a DST file into a JSON Stitch IR."
+        description="Convert a DST file into a structured Stitch IR JSON."
     )
     parser.add_argument(
         "dst",
-        nargs="?",
-        default="embroidery_dst_lab/input/test.dst",
-        help="Path to the DST file (default: embroidery_dst_lab/input/test.dst)",
+        help="Path to the DST file",
     )
     parser.add_argument(
         "output",
-        nargs="?",
-        default="embroidery_dst_lab/output/test_stitch_ir.json",
-        help="Where to store the JSON IR (default: embroidery_dst_lab/output/test_stitch_ir.json)",
+        help="Path to the output JSON file",
     )
     args = parser.parse_args()
 
@@ -81,9 +73,8 @@ def main() -> None:
         raise SystemExit(f"File not found: {dst_path}")
 
     ir = dst_to_ir(dst_path)
-    out_path = Path(args.output)
-    out_path.write_text(json.dumps(ir, indent=2), encoding="utf-8")
-    print(f"Saved IR with {ir['stitch_count']} stitches to {out_path}")
+    Path(args.output).write_text(json.dumps(ir, indent=2), encoding="utf-8")
+    print(f"Saved IR with {ir['stitch_count']} stitches to {args.output}")
 
 
 if __name__ == "__main__":

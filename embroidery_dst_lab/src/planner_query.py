@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CLI helper for querying embroidery_library items as a lightweight AI planner."""
+"""CLI helper for querying embroidery_library items with filters."""
 
 from __future__ import annotations
 
@@ -44,7 +44,7 @@ def score_item(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Query the embroidery library index with simple keyword and classification filters."
+        description="Query the embroidery library with keyword + technical filters."
     )
     parser.add_argument(
         "--library-root",
@@ -54,13 +54,37 @@ def main() -> None:
     parser.add_argument(
         "--query",
         default="",
-        help="Free-text keywords to search inside labels/descriptions.",
+        help="Keyword query applied to label/description.",
     )
     parser.add_argument(
         "--require-class",
         action="append",
         default=[],
-        help="Filter by stitch classification (e.g., --require-class tatami). Repeatable.",
+        help="Filter by layer class (run/satin_light/satin_dense/tatami/travel/detail). Repeatable.",
+    )
+    parser.add_argument(
+        "--min-stitches",
+        type=int,
+        default=None,
+        help="Minimum stitch count required.",
+    )
+    parser.add_argument(
+        "--max-stitches",
+        type=int,
+        default=None,
+        help="Maximum stitch count allowed.",
+    )
+    parser.add_argument(
+        "--min-density",
+        type=float,
+        default=None,
+        help="Minimum density (pts/mm^2).",
+    )
+    parser.add_argument(
+        "--max-density",
+        type=float,
+        default=None,
+        help="Maximum density (pts/mm^2).",
     )
     parser.add_argument(
         "--max-results",
@@ -71,7 +95,7 @@ def main() -> None:
     parser.add_argument(
         "--json",
         action="store_true",
-        help="Output the ranked list as JSON instead of text.",
+        help="Output JSON instead of human-readable text.",
     )
     args = parser.parse_args()
 
@@ -87,6 +111,21 @@ def main() -> None:
             k.lower(): v for k, v in data.get("classification_summary", {}).items()
         }
         description = data.get("description")
+        stitch_count = data.get("stitch_count")
+        if args.min_stitches is not None and stitch_count is not None:
+            if stitch_count < args.min_stitches:
+                continue
+        if args.max_stitches is not None and stitch_count is not None:
+            if stitch_count > args.max_stitches:
+                continue
+        density_range = data.get("density_range_pts_per_mm2")
+        if density_range:
+            if args.min_density is not None and density_range.get("max") is not None:
+                if density_range["max"] < args.min_density:
+                    continue
+            if args.max_density is not None and density_range.get("min") is not None:
+                if density_range["min"] > args.max_density:
+                    continue
         score, _ = score_item(label, description, classification_summary, tokens, require_classes)
         if score < 0:
             continue
@@ -95,9 +134,10 @@ def main() -> None:
                 "id": item_id,
                 "label": label,
                 "score": score,
-                "stitch_count": data.get("stitch_count"),
+                "stitch_count": stitch_count,
                 "classification_summary": classification_summary,
                 "description": description,
+                "density_range": density_range,
                 "recipe": data["paths"].get("recipe"),
                 "preview": data["paths"].get("preview"),
             }
@@ -108,25 +148,30 @@ def main() -> None:
 
     if args.json:
         print(json.dumps(results, indent=2))
-    else:
-        if not results:
-            print("No items matched the query.")
-            return
-        for item in results:
-            print(f"- {item['label']} ({item['id']})")
-            print(f"  score: {item['score']}  stitches: {item['stitch_count']}")
-            if item["classification_summary"]:
-                summary_str = ", ".join(
-                    f"{k}:{v}" for k, v in item["classification_summary"].items()
-                )
-                print(f"  classes: {summary_str}")
-            if item["description"]:
-                print(f"  desc: {item['description']}")
-            if item["recipe"]:
-                print(f"  recipe: {item['recipe']}")
-            if item["preview"]:
-                print(f"  preview: {item['preview']}")
-            print()
+        return
+
+    if not results:
+        print("No items matched the query.")
+        return
+
+    for item in results:
+        print(f"- {item['label']} ({item['id']})")
+        print(f"  score: {item['score']}  stitches: {item['stitch_count']}")
+        if item["classification_summary"]:
+            summary_str = ", ".join(
+                f"{k}:{v}" for k, v in item["classification_summary"].items()
+            )
+            print(f"  classes: {summary_str}")
+        if item["description"]:
+            print(f"  desc: {item['description']}")
+        if item["density_range"]:
+            dr = item["density_range"]
+            print(f"  density: {dr.get('min')} - {dr.get('max')} pts/mm^2")
+        if item["recipe"]:
+            print(f"  recipe: {item['recipe']}")
+        if item["preview"]:
+            print(f"  preview: {item['preview']}")
+        print()
 
 
 if __name__ == "__main__":

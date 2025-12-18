@@ -12,12 +12,16 @@
     "recipe": "items\\base_raso_densit_40_inclinazione_rutata\\recipe.yaml",
     "preview": "items\\base_raso_densit_40_inclinazione_rutata\\preview.png"
   },
-  "generated_at": "2025-12-18T16:13:05+00:00",
+  "generated_at": "2025-12-18T16:49:11+00:00",
   "bounds_mm": {
     "minx": -15.0,
     "miny": -15.4,
     "maxx": 0.2,
     "maxy": 0.0
   },
-  "description": "Auto import BASE RASO DENSIT\u00e0 40 INCLINAZIONE RUTATA"
+  "description": "Auto import BASE RASO DENSIT\u00e0 40 INCLINAZIONE RUTATA",
+  "density_range_pts_per_mm2": {
+    "min": 2.034970715232354,
+    "max": 2.034970715232354
+  }
 }

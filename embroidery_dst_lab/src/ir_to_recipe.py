@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate a JSON recipe card from computed stitch statistics."""
+"""Generate recipe cards from stats/previews."""
 
 from __future__ import annotations
 
@@ -39,32 +39,32 @@ def build_recipe(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Generate a recipe card JSON from stats/preview artifacts."
+        description="Generate a recipe JSON from stats/preview artifacts."
     )
     parser.add_argument(
         "--stats",
-        default="embroidery_dst_lab/output/test_stats.json",
-        help="Path to the stats JSON (default: embroidery_dst_lab/output/test_stats.json)",
+        required=True,
+        help="Path to the stats JSON.",
     )
     parser.add_argument(
         "--ir",
-        default="embroidery_dst_lab/output/test_stitch_ir.json",
-        help="Path to the Stitch IR JSON (default: embroidery_dst_lab/output/test_stitch_ir.json)",
+        required=True,
+        help="Path to the Stitch IR JSON (used as example reference).",
     )
     parser.add_argument(
         "--preview",
-        default="embroidery_dst_lab/output/test_preview.png",
+        default=None,
         help="Optional preview path to include inside the recipe examples.",
     )
     parser.add_argument(
         "--output",
-        default="embroidery_dst_lab/output/test_recipe.json",
-        help="Where to save the recipe JSON (default: embroidery_dst_lab/output/test_recipe.json)",
+        required=True,
+        help="Where to save the recipe JSON.",
     )
     parser.add_argument(
         "--recipe-id",
-        default="RECIPE_FROM_DST_TEST",
-        help="Identifier for the recipe card (default: RECIPE_FROM_DST_TEST)",
+        required=True,
+        help="Identifier for the recipe.",
     )
     args = parser.parse_args()
 
@@ -75,18 +75,18 @@ def main() -> None:
     stats = json.loads(stats_path.read_text(encoding="utf-8"))
 
     examples = []
-    preview_path = Path(args.preview)
-    if preview_path.exists():
-        examples.append(str(preview_path))
+    if args.preview:
+        preview_path = Path(args.preview)
+        if preview_path.exists():
+            examples.append(str(preview_path))
 
     ir_path = Path(args.ir)
     if ir_path.exists():
         examples.append(str(ir_path))
 
     recipe = build_recipe(args.recipe_id, stats, examples, source=str(ir_path))
-    output_path = Path(args.output)
-    output_path.write_text(json.dumps(recipe, indent=2), encoding="utf-8")
-    print(f"Recipe saved to {output_path}")
+    Path(args.output).write_text(json.dumps(recipe, indent=2), encoding="utf-8")
+    print(f"Recipe saved to {args.output}")
 
 
 if __name__ == "__main__":

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Phase 8: package DST-derived artifacts into a library item for the AI planner."""
+"""Package DST-derived artifacts into a library item for the AI planner."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import sys
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import yaml
 
@@ -47,6 +47,7 @@ def _build_manifest(
     preview_path: Path | None,
     stats: Dict[str, Any],
     description: str | None = None,
+    density_range: Dict[str, float] | None = None,
 ) -> Dict[str, Any]:
     manifest = {
         "id": item_id,
@@ -68,6 +69,8 @@ def _build_manifest(
         manifest["bounds_mm"] = bounds[0].get("bounds")
     if description:
         manifest["description"] = description
+    if density_range:
+        manifest["density_range_pts_per_mm2"] = density_range
     return manifest
 
 
@@ -88,16 +91,13 @@ def package_dst(
 
     label_value = label or dst_path.stem
 
-    # Copy DST for archival.
     dst_copy_path = item_dir / "source.dst"
     shutil.copy2(dst_path, dst_copy_path)
 
-    # Step 1: DST -> IR
     ir = dst_to_ir(dst_path)
     ir_path = item_dir / "stitch_ir.json"
     _write_json(ir_path, ir)
 
-    # Step 2: Stats & Preview
     stats = compute_stats(ir)
     stats_path = item_dir / "stats.json"
     _write_json(stats_path, stats)
@@ -111,7 +111,6 @@ def package_dst(
             preview_path = item_dir / "preview.png"
             plot_preview(layers, preview_path, title=item_id)
 
-    # Step 3: Recipe (JSON + YAML)
     examples: List[str] = []
     if preview_path and preview_path.exists():
         examples.append(_relative(preview_path, library_root))
@@ -124,8 +123,11 @@ def package_dst(
         source=str(_relative(dst_copy_path, library_root)),
     )
     recipe["label"] = label_value
-    if description:
-        recipe["description"] = description
+    summaries = stats.get("layer_summaries") or []
+    auto_description: Optional[str] = "; ".join(summaries) if summaries else None
+    final_description = description or auto_description
+    if final_description:
+        recipe["description"] = final_description
     recipe["stitch_profile"]["layer_classification_summary"] = stats.get(
         "layer_classification_summary", {}
     )
@@ -135,7 +137,20 @@ def package_dst(
     _write_json(recipe_json_path, recipe)
     _write_yaml(recipe_yaml_path, recipe)
 
-    # Step 4: Item manifest + library index
+    density_values = [
+        layer["density_stitches_per_mm2"]
+        for layer in stats.get("layers", [])
+        if layer.get("density_stitches_per_mm2") is not None
+    ]
+    density_range = (
+        {
+            "min": float(min(density_values)),
+            "max": float(max(density_values)),
+        }
+        if density_values
+        else None
+    )
+
     manifest = _build_manifest(
         item_id,
         _relative(dst_copy_path, library_root),
@@ -144,7 +159,8 @@ def package_dst(
         _relative(recipe_yaml_path, library_root),
         _relative(preview_path, library_root) if preview_path else None,
         stats,
-        description=description,
+        description=final_description,
+        density_range=density_range,
     )
     manifest_path = item_dir / "manifest.json"
     _write_json(manifest_path, manifest)
@@ -162,8 +178,10 @@ def package_dst(
         "classification_summary": stats.get("layer_classification_summary", {}),
         "updated_at": manifest["generated_at"],
     }
-    if description:
-        index_entry["description"] = description
+    if final_description:
+        index_entry["description"] = final_description
+    if density_range:
+        index_entry["density_range_pts_per_mm2"] = density_range
     index["items"][item_id] = index_entry
 
     _write_json(index_path, index)

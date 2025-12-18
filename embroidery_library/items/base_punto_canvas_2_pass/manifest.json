@@ -12,12 +12,16 @@
     "recipe": "items\\base_punto_canvas_2_pass\\recipe.yaml",
     "preview": "items\\base_punto_canvas_2_pass\\preview.png"
   },
-  "generated_at": "2025-12-18T15:57:03+00:00",
+  "generated_at": "2025-12-18T16:49:10+00:00",
   "bounds_mm": {
     "minx": -350.3,
     "miny": -560.6,
     "maxx": 350.3,
     "maxy": 560.7
   },
-  "description": "Base canvas stitch, canvas fill pattern"
+  "description": "Auto import BASE PUNTO CANVAS 2 PASS",
+  "density_range_pts_per_mm2": {
+    "min": 0.8467273815997702,
+    "max": 0.8467273815997702
+  }
 }

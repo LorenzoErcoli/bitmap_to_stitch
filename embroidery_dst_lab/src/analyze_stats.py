@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compute technical statistics, previews, and stitch-type guesses from a Stitch IR."""
+"""Compute statistics, previews and stitch-type heuristics from a Stitch IR."""
 
 from __future__ import annotations
 
@@ -14,12 +14,12 @@ import numpy as np
 
 try:
     from shapely.geometry import MultiPoint
-except ImportError:  # pragma: no cover - optional dependency guard
+except ImportError:  # pragma: no cover
     MultiPoint = None  # type: ignore
 
 try:
     import matplotlib.pyplot as plt
-except ImportError:  # pragma: no cover - optional dependency guard
+except ImportError:  # pragma: no cover
     plt = None  # type: ignore
 
 from pyembroidery import JUMP, STITCH, TRIM
@@ -60,12 +60,23 @@ def _layer_metrics(points: List[Dict[str, Any]]) -> Dict[str, Any]:
         "lengths": lengths,
         "angles": angles,
         "histogram": histogram.tolist(),
+        "std_length": float(np.std(lengths)) if lengths else 0.0,
     }
 
 
+def _coverage_ratio(bounds: Dict[str, float], area: float) -> float | None:
+    bbox_area = (bounds["maxx"] - bounds["minx"]) * (bounds["maxy"] - bounds["miny"])
+    if bbox_area <= 0:
+        return None
+    return area / bbox_area if area else 0.0
+
+
 def _classify_layer(layer_stat: Dict[str, Any]) -> Dict[str, Any]:
-    density = layer_stat.get("density_stitches_per_mm2") or 0.0
+    density = layer_stat.get("density_stitches_per_mm2")
+    density = density if density is not None else 0.0
     avg_len = layer_stat.get("avg_stitch_length_mm", 0.0)
+    std_len = layer_stat.get("std_stitch_length_mm", 0.0)
+    coverage = layer_stat.get("coverage_ratio") or 0.0
     hist: List[int] = layer_stat.get("angle_histogram_deg") or []
     total = sum(hist)
 
@@ -80,32 +91,56 @@ def _classify_layer(layer_stat: Dict[str, Any]) -> Dict[str, Any]:
     bins_used = sum(1 for value in hist if value > 0.05 * total)
     alignment_ratio = dominant / total if total else 0.0
 
-    if density < 0.35 and avg_len >= 2.0 and bins_used <= 2 and alignment_ratio >= 0.7:
-        return {
-            "type": "run",
-            "confidence": 0.75,
-            "reason": f"Low density ({density:.2f}), long stitches ({avg_len:.2f} mm) and highly aligned directions ({alignment_ratio:.2f}).",
-        }
+    def result(type_name: str, confidence: float, reason: str) -> Dict[str, Any]:
+        return {"type": type_name, "confidence": confidence, "reason": reason}
 
-    if 0.3 <= density <= 1.1 and 1.0 <= avg_len <= 4.0 and bins_used <= 4 and 0.45 <= alignment_ratio <= 0.75:
-        return {
-            "type": "satin",
-            "confidence": 0.65,
-            "reason": f"Medium density ({density:.2f}), stitch length {avg_len:.2f} mm and limited direction spread ({bins_used} bins).",
-        }
+    if density < 0.15 and avg_len < 2.0:
+        return result(
+            "travel",
+            0.8,
+            f"Very low density ({density:.2f}) with short stitches ({avg_len:.2f} mm).",
+        )
 
-    if density > 0.8 and avg_len <= 3.5 and bins_used >= 4 and alignment_ratio < 0.6:
-        return {
-            "type": "tatami",
-            "confidence": 0.7,
-            "reason": f"High density ({density:.2f}) with multi-directional coverage ({bins_used} bins).",
-        }
+    if density < 0.4 and avg_len >= 2.3 and bins_used <= 2 and alignment_ratio >= 0.7:
+        return result(
+            "run",
+            0.8,
+            f"Low density ({density:.2f}), long stitches ({avg_len:.2f} mm) and aligned directions ({alignment_ratio:.2f}).",
+        )
 
-    return {
-        "type": "unknown",
-        "confidence": 0.3,
-        "reason": f"Metrics outside heuristics (density {density:.2f}, avg {avg_len:.2f} mm, bins {bins_used}, alignment {alignment_ratio:.2f}).",
-    }
+    if 0.35 <= density <= 0.8 and 2.0 <= avg_len <= 5.0 and bins_used <= 3 and 0.45 <= alignment_ratio <= 0.85:
+        return result(
+            "satin_light",
+            0.7,
+            f"Medium density ({density:.2f}) satin-like stitches ({avg_len:.2f} mm) with few directions ({bins_used}).",
+        )
+
+    if 0.8 < density <= 1.4 and 1.0 <= avg_len <= 3.5 and std_len <= 1.1 and bins_used <= 4:
+        return result(
+            "satin_dense",
+            0.75,
+            f"High density satin ({density:.2f}) with controlled lengths (avg {avg_len:.2f} mm, std {std_len:.2f}).",
+        )
+
+    if density > 0.75 and avg_len <= 4.5 and bins_used >= 4 and alignment_ratio < 0.7:
+        return result(
+            "tatami",
+            0.75,
+            f"Fill pattern: density {density:.2f}, multi-directional ({bins_used} bins) with shorter stitches ({avg_len:.2f} mm).",
+        )
+
+    if coverage < 0.2 and density < 0.5:
+        return result(
+            "detail",
+            0.55,
+            f"Low coverage ({coverage:.2f}) and sparse density ({density:.2f}) suggests detail/outline work.",
+        )
+
+    return result(
+        "unknown",
+        0.3,
+        f"Metrics outside heuristics (density {density:.2f}, avg {avg_len:.2f} mm, bins {bins_used}, alignment {alignment_ratio:.2f}).",
+    )
 
 
 def compute_stats(ir: Dict[str, Any]) -> Dict[str, Any]:
@@ -121,6 +156,7 @@ def compute_stats(ir: Dict[str, Any]) -> Dict[str, Any]:
             "angle_histogram_deg": [],
             "layers": [],
             "layer_classification_summary": {},
+            "layer_summaries": [],
         }
 
     lengths: List[float] = []
@@ -146,26 +182,37 @@ def compute_stats(ir: Dict[str, Any]) -> Dict[str, Any]:
         metrics = _layer_metrics(pts)
         layer_lengths = metrics["lengths"]
         avg_layer_length = float(np.mean(layer_lengths)) if layer_lengths else 0.0
+        std_layer_length = metrics["std_length"]
         layer_path = float(sum(layer_lengths))
         area = _layer_hull_area(pts)
         bounds = _layer_bounds(pts)
         density = (len(pts) / area) if area > 0 else None
+        coverage = _coverage_ratio(bounds, area)
         layer_entry = {
             "color": color,
             "stitch_count": len(pts),
             "path_length_mm": layer_path,
             "avg_stitch_length_mm": avg_layer_length,
+            "std_stitch_length_mm": std_layer_length,
             "hull_area_mm2": area,
             "bounds": bounds,
             "density_stitches_per_mm2": density,
+            "coverage_ratio": coverage,
             "angle_histogram_deg": metrics["histogram"],
         }
         layer_entry["classification"] = _classify_layer(layer_entry)
+        density_str = (
+            f"{density:.2f} pts/mm^2" if density is not None else "density N/A"
+        )
+        coverage_str = f"{coverage:.2f}" if coverage is not None else "cov N/A"
+        cls = layer_entry["classification"]["type"]
+        layer_entry["summary"] = (
+            f"Layer {color} [{cls}] {len(pts)} sts, avg {avg_layer_length:.2f} mm, {density_str}, coverage {coverage_str}"
+        )
         layer_stats.append(layer_entry)
 
     histogram, _ = np.histogram(angles, bins=ANGLE_BINS, range=ANGLE_RANGE)
     summary = Counter(layer["classification"]["type"] for layer in layer_stats)
-    # Remove "unknown" from summary if it is the only entry to reduce clutter.
     summary_dict = {k: v for k, v in summary.items() if v > 0}
 
     return {
@@ -178,6 +225,7 @@ def compute_stats(ir: Dict[str, Any]) -> Dict[str, Any]:
         "angle_histogram_deg": histogram.tolist(),
         "layers": layer_stats,
         "layer_classification_summary": summary_dict,
+        "layer_summaries": [layer["summary"] for layer in layer_stats],
     }
 
 
@@ -199,7 +247,7 @@ def plot_preview(
     ax.set_aspect("equal", adjustable="box")
     ax.set_title(title)
     ax.legend(loc="best", fontsize=8)
-    ax.invert_yaxis()  # embroidery coordinates often have Y growing downwards
+    ax.invert_yaxis()
     fig.tight_layout()
     fig.savefig(output_path, dpi=200)
     plt.close(fig)
@@ -208,22 +256,22 @@ def plot_preview(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Compute statistics from a Stitch IR and optionally save a preview plot."
+        description="Compute statistics from a Stitch IR and optionally save a preview."
     )
     parser.add_argument(
         "--ir",
-        default="embroidery_dst_lab/output/test_stitch_ir.json",
-        help="Path to the Stitch IR JSON file (default: embroidery_dst_lab/output/test_stitch_ir.json)",
+        required=True,
+        help="Path to the Stitch IR JSON file",
     )
     parser.add_argument(
         "--stats-out",
-        default="embroidery_dst_lab/output/test_stats.json",
-        help="Where to save the statistics JSON (default: embroidery_dst_lab/output/test_stats.json)",
+        required=True,
+        help="Where to save the statistics JSON",
     )
     parser.add_argument(
         "--preview-out",
-        default="embroidery_dst_lab/output/test_preview.png",
-        help="Where to save the preview PNG (default: embroidery_dst_lab/output/test_preview.png)",
+        default=None,
+        help="Where to save the preview PNG (optional).",
     )
     parser.add_argument(
         "--skip-preview",
@@ -241,12 +289,12 @@ def main() -> None:
     Path(args.stats_out).write_text(json.dumps(stats, indent=2), encoding="utf-8")
     print(f"Saved stats to {args.stats_out}")
 
-    if not args.skip_preview:
+    if not args.skip_preview and args.preview_out:
         layers = defaultdict(list)
         for stitch in ir["stitches"]:
             layers[stitch["color"]].append(stitch)
         if layers:
-            plot_preview(layers, Path(args.preview_out))
+            plot_preview(layers, Path(args.preview_out), title=ir_path.stem)
 
 
 if __name__ == "__main__":

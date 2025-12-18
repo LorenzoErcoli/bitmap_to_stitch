@@ -12,12 +12,16 @@
     "recipe": "items\\base_raso_densit_40_verticale\\recipe.yaml",
     "preview": "items\\base_raso_densit_40_verticale\\preview.png"
   },
-  "generated_at": "2025-12-18T16:06:59+00:00",
+  "generated_at": "2025-12-18T16:49:11+00:00",
   "bounds_mm": {
     "minx": -15.0,
     "miny": -15.4,
     "maxx": 0.0,
     "maxy": 0.0
   },
-  "description": "Auto import BASE RASO DENSIT\u00e0 40 VERTICALE"
+  "description": "Auto import BASE RASO DENSIT\u00e0 40 VERTICALE",
+  "density_range_pts_per_mm2": {
+    "min": 1.5273800225635685,
+    "max": 1.5273800225635685
+  }
 }

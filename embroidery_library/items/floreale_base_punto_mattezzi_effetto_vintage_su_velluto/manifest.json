@@ -13,12 +13,16 @@
     "recipe": "items\\floreale_base_punto_mattezzi_effetto_vintage_su_velluto\\recipe.yaml",
     "preview": "items\\floreale_base_punto_mattezzi_effetto_vintage_su_velluto\\preview.png"
   },
-  "generated_at": "2025-12-18T16:07:00+00:00",
+  "generated_at": "2025-12-18T16:49:12+00:00",
   "bounds_mm": {
     "minx": 0.0,
     "miny": 0.0,
     "maxx": 162.20000000000002,
     "maxy": 124.5
   },
-  "description": "Auto import FLOREALE BASE + PUNTO MATTEZZI EFFETTO VINTAGE - SU VELLUTO"
+  "description": "Auto import FLOREALE BASE + PUNTO MATTEZZI EFFETTO VINTAGE - SU VELLUTO",
+  "density_range_pts_per_mm2": {
+    "min": 0.4055143108946401,
+    "max": 1.322954978174197
+  }
 }

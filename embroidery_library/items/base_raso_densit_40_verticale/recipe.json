@@ -29,6 +29,7 @@
         "stitch_count": 352,
         "path_length_mm": 941.9279190667456,
         "avg_stitch_length_mm": 2.698933865520761,
+        "std_stitch_length_mm": 0.6631496443965069,
         "hull_area_mm2": 230.46,
         "bounds": {
           "minx": -15.0,
@@ -37,6 +38,7 @@
           "maxy": 0.0
         },
         "density_stitches_per_mm2": 1.5273800225635685,
+        "coverage_ratio": 0.9976623376623377,
         "angle_histogram_deg": [
           0,
           0,
@@ -55,7 +57,8 @@
           "type": "unknown",
           "confidence": 0.3,
           "reason": "Metrics outside heuristics (density 1.53, avg 2.70 mm, bins 3, alignment 0.50)."
-        }
+        },
+        "summary": "Layer 0 [unknown] 352 sts, avg 2.70 mm, 1.53 pts/mm^2, coverage 1.00"
       }
     ],
     "layer_classification_summary": {

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Batch-import all DST files inside the input folder into the embroidery library."""
+"""Batch import of DST files into the embroidery library."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ def item_exists(library_root: Path, item_id: str) -> bool:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Scan embroidery_dst_lab/input for DST files and build missing library items."
+                description="Scan embroidery_dst_lab/input for DST files and build missing library items."
     )
     parser.add_argument(
         "--input-dir",
@@ -38,12 +38,12 @@ def main() -> None:
     parser.add_argument(
         "--description-template",
         default=None,
-        help="Optional template for descriptions, e.g. 'Canvas fill: {name}'. Available fields: {name}, {item_id}.",
+        help="Optional template for descriptions, e.g. 'Canvas fill: {name}'. Fields: {name}, {item_id}.",
     )
     parser.add_argument(
         "--skip-preview",
         action="store_true",
-        help="Skip preview generation for all items (useful on headless setups).",
+        help="Skip preview generation for all items.",
     )
     parser.add_argument(
         "--rebuild-existing",
@@ -54,7 +54,6 @@ def main() -> None:
 
     input_dir = Path(args.input_dir)
     library_root = Path(args.library_root)
-
     dst_files = sorted(input_dir.glob("*.dst"))
     if not dst_files:
         print(f"No DST files found inside {input_dir}")

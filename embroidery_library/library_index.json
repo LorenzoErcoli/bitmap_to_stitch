@@ -13,8 +13,12 @@
       "classification_summary": {
         "tatami": 1
       },
-      "updated_at": "2025-12-18T15:57:03+00:00",
-      "description": "Base canvas stitch, canvas fill pattern"
+      "updated_at": "2025-12-18T16:49:10+00:00",
+      "description": "Auto import BASE PUNTO CANVAS 2 PASS",
+      "density_range_pts_per_mm2": {
+        "min": 0.8467273815997702,
+        "max": 0.8467273815997702
+      }
     },
     "base_raso_densit_30_orizzontale": {
       "label": "BASE RASO DENSIT\u00e0 30 ORIZZONTALE",
@@ -27,10 +31,14 @@
       },
       "stitch_count": 273,
       "classification_summary": {
-        "unknown": 1
+        "satin_dense": 1
       },
-      "updated_at": "2025-12-18T16:06:58+00:00",
-      "description": "Auto import BASE RASO DENSIT\u00e0 30 ORIZZONTALE"
+      "updated_at": "2025-12-18T16:49:11+00:00",
+      "description": "Auto import BASE RASO DENSIT\u00e0 30 ORIZZONTALE",
+      "density_range_pts_per_mm2": {
+        "min": 1.182355616189177,
+        "max": 1.182355616189177
+      }
     },
     "base_raso_densit_30_verticale": {
       "label": "BASE RASO DENSIT\u00e0 30 VERTICALE",
@@ -43,10 +51,14 @@
       },
       "stitch_count": 272,
       "classification_summary": {
-        "unknown": 1
+        "satin_dense": 1
       },
-      "updated_at": "2025-12-18T16:06:59+00:00",
-      "description": "Auto import BASE RASO DENSIT\u00e0 30 VERTICALE"
+      "updated_at": "2025-12-18T16:49:11+00:00",
+      "description": "Auto import BASE RASO DENSIT\u00e0 30 VERTICALE",
+      "density_range_pts_per_mm2": {
+        "min": 1.178407417034919,
+        "max": 1.178407417034919
+      }
     },
     "base_raso_densit_40_orizzontale": {
       "label": "BASE RASO DENSIT\u00e0 40 ORIZZONTALE",
@@ -61,8 +73,12 @@
       "classification_summary": {
         "unknown": 1
       },
-      "updated_at": "2025-12-18T16:06:59+00:00",
-      "description": "Auto import BASE RASO DENSIT\u00e0 40 ORIZZONTALE"
+      "updated_at": "2025-12-18T16:49:11+00:00",
+      "description": "Auto import BASE RASO DENSIT\u00e0 40 ORIZZONTALE",
+      "density_range_pts_per_mm2": {
+        "min": 1.5288334524350897,
+        "max": 1.5288334524350897
+      }
     },
     "base_raso_densit_40_verticale": {
       "label": "BASE RASO DENSIT\u00e0 40 VERTICALE",
@@ -77,8 +93,12 @@
       "classification_summary": {
         "unknown": 1
       },
-      "updated_at": "2025-12-18T16:06:59+00:00",
-      "description": "Auto import BASE RASO DENSIT\u00e0 40 VERTICALE"
+      "updated_at": "2025-12-18T16:49:11+00:00",
+      "description": "Auto import BASE RASO DENSIT\u00e0 40 VERTICALE",
+      "density_range_pts_per_mm2": {
+        "min": 1.5273800225635685,
+        "max": 1.5273800225635685
+      }
     },
     "floreale_base_punto_mattezzi_effetto_vintage_su_velluto": {
       "label": "FLOREALE BASE + PUNTO MATTEZZI EFFETTO VINTAGE - SU VELLUTO",
@@ -94,8 +114,12 @@
         "tatami": 2,
         "unknown": 1
       },
-      "updated_at": "2025-12-18T16:07:00+00:00",
-      "description": "Auto import FLOREALE BASE + PUNTO MATTEZZI EFFETTO VINTAGE - SU VELLUTO"
+      "updated_at": "2025-12-18T16:49:12+00:00",
+      "description": "Auto import FLOREALE BASE + PUNTO MATTEZZI EFFETTO VINTAGE - SU VELLUTO",
+      "density_range_pts_per_mm2": {
+        "min": 0.4055143108946401,
+        "max": 1.322954978174197
+      }
     },
     "base_raso_densit_40_inclinazione_rutata": {
       "label": "BASE RASO DENSIT\u00e0 40 INCLINAZIONE RUTATA",
@@ -110,8 +134,12 @@
       "classification_summary": {
         "tatami": 1
       },
-      "updated_at": "2025-12-18T16:13:05+00:00",
-      "description": "Auto import BASE RASO DENSIT\u00e0 40 INCLINAZIONE RUTATA"
+      "updated_at": "2025-12-18T16:49:11+00:00",
+      "description": "Auto import BASE RASO DENSIT\u00e0 40 INCLINAZIONE RUTATA",
+      "density_range_pts_per_mm2": {
+        "min": 2.034970715232354,
+        "max": 2.034970715232354
+      }
     }
   }
 }

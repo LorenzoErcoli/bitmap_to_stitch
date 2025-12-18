@@ -15,32 +15,29 @@ def read_dst(dst_path: Path, limit: int) -> None:
 
     print(f"File: {dst_path}")
     print(f"Stitch count: {len(pattern.stitches)}")
-    print(f"Color changes: {len(pattern.threadlist)} thread entries")
-    print("Threads (pyembroidery Thread objects):")
+    print(f"Thread entries: {len(pattern.threadlist)}")
     for idx, thread in enumerate(pattern.threadlist):
         print(f"  [{idx}] {thread}")
 
     head = pattern.stitches[:limit]
-    print(f"\nFirst {len(head)} stitches (x, y, command):")
+    print(f"\nFirst {len(head)} stitches (x, y, cmd):")
     for x, y, cmd in head:
         print(f"  ({x}, {y}, {cmd})")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Inspect a DST file and print the first stitches."
+        description="Inspect a DST file and dump the first stitches."
     )
     parser.add_argument(
         "dst",
-        nargs="?",
-        default="embroidery_dst_lab/input/test.dst",
-        help="Path to the DST file (default: embroidery_dst_lab/input/test.dst)",
+        help="Path to the DST file",
     )
     parser.add_argument(
         "--limit",
         type=int,
         default=10,
-        help="How many stitches to display from the head (default: 10)",
+        help="How many stitches from the head to show (default: 10)",
     )
     args = parser.parse_args()
 
