@@ -51,24 +51,34 @@ function readOptions() {
 async function handleConvert() {
   console.log("Genera SVG premuto");
   downloadEl.style.display = "none";
+  const statusHistory = [];
+  const pushStatus = (msg) => {
+    statusHistory.push(msg);
+    statusEl.innerText = statusHistory.join("\n");
+  };
 
   const fileInput = document.getElementById("image");
   if (fileInput.files.length === 0) {
-    statusEl.textContent = "Seleziona un'immagine prima di procedere.";
+    pushStatus("Seleziona un'immagine prima di procedere.");
     return;
   }
 
   const file = fileInput.files[0];
-  statusEl.textContent = "Caricamento runtime...";
+  pushStatus("Carico runtime Python...");
   const pyodide = await initPyodide();
 
-  statusEl.textContent = "Lettura immagine...";
+  pushStatus("Lettura immagine...");
   const arrayBuffer = await file.arrayBuffer();
   const imageBytes = new Uint8Array(arrayBuffer);
   const options = readOptions();
 
+  const reportStatus = pyodide.toPy((msg) => {
+    pushStatus(msg);
+  });
+  pyodide.globals.set("status_callback", reportStatus);
+
   try {
-    statusEl.textContent = "Elaborazione in corso...";
+    pushStatus("Elaborazione in corso...");
     const runPipeline = pyodide.globals.get("run_pipeline_browser");
     const pyBytes = pyodide.toPy(imageBytes);
     const pyOptions = pyodide.toPy(options);
@@ -94,10 +104,13 @@ async function handleConvert() {
     downloadEl.download = `${file.name.replace(/\.[^.]+$/, "") || "stitch"}.svg`;
     downloadEl.style.display = "inline-block";
 
-    statusEl.textContent = summary;
+    pushStatus(summary);
   } catch (error) {
     console.error("Errore durante la conversione:", error);
-    statusEl.textContent = `Errore: ${error.message || error}`;
+    pushStatus(`Errore: ${error.message || error}`);
+  } finally {
+    pyodide.runPython("status_callback = None");
+    reportStatus.destroy();
   }
 }
 

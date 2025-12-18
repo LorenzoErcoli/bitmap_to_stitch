@@ -5,6 +5,15 @@ import numpy as np
 from PIL import Image
 
 
+status_callback = None
+
+
+def emit_status(message):
+    global status_callback
+    if status_callback is not None:
+        status_callback(str(message))
+
+
 def load_points_from_bytes(data, max_width=None, threshold=200):
     img = Image.open(io.BytesIO(data)).convert("L")
 
@@ -19,6 +28,9 @@ def load_points_from_bytes(data, max_width=None, threshold=200):
     arr = np.array(img)
     ys, xs = np.where(arr < threshold)
     points = list(zip(xs.tolist(), ys.tolist()))
+    emit_status(
+        f"Lettura bitmap completata: {img.size[0]}x{img.size[1]} px, punti neri = {len(points)}"
+    )
     return points, img.size
 
 
@@ -271,6 +283,7 @@ def build_svg_single_path(points, scale=1.0, stroke_width=0.3, chunk_size=0):
 
 
 def run_pipeline(image_bytes, opts):
+    emit_status("=== Inizio nuova conversione ===")
     max_width = opts["max_width"] if opts["max_width"] > 0 else None
     points, size = load_points_from_bytes(
         image_bytes, max_width=max_width, threshold=opts["threshold"]
@@ -280,6 +293,10 @@ def run_pipeline(image_bytes, opts):
 
     if opts["style"] == "degrade":
         seed = int(opts["degrade_seed"]) if opts["degrade_seed"] else None
+        emit_status(
+            "Applico effetti degradé: "
+            f"drop={opts['degrade_drop']:.2f}, jitter={opts['degrade_jitter']:.2f}"
+        )
         points = apply_random_degrade_effects(
             points,
             drop_probability=opts["degrade_drop"],
@@ -288,10 +305,16 @@ def run_pipeline(image_bytes, opts):
             seed=seed,
         )
     elif opts["grid_cell_size"] > 1:
+        emit_status(f"Regolarizzo la griglia (cell={opts['grid_cell_size']} px)...")
         points = regularize_points_on_grid(points, opts["grid_cell_size"])
 
     if opts["max_points"] > 0:
+        before = len(points)
         points = subsample_points(points, max_points=opts["max_points"])
+        emit_status(
+            f"Limite max-points: {len(points)} rimanenti "
+            f"(prima {before}, riduzione {-len(points)+before})"
+        )
 
     if not points:
         raise ValueError("Tutti i punti sono stati filtrati dai parametri attuali.")
@@ -302,13 +325,22 @@ def run_pipeline(image_bytes, opts):
             band_height=opts["scanline_band"],
             serpentine=opts["serpentine"],
         )
+        emit_status(
+            "Ordering scanline completato "
+            f"(band={opts['scanline_band']} px, serpentine={opts['serpentine']})"
+        )
     else:
         ordered = order_points_nearest_neighbor(points)
+        emit_status("Ordering nearest-neighbor completato")
 
     final_path = ordered
     discarded = []
     if opts["min_dist"] > 0 and opts["scale"] > 0:
         min_dist_px = opts["min_dist"] / opts["scale"]
+        emit_status(
+            f"Filtro min-dist rigido: {opts['min_dist']} unità "
+            f"(≈ {min_dist_px:.2f} px)"
+        )
         path_filtered, standby = filter_with_min_dist_and_standby(
             ordered, min_dist_px
         )
@@ -321,6 +353,10 @@ def run_pipeline(image_bytes, opts):
                 current_path, current_standby, min_dist_px
             )
             current_standby = leftover
+            emit_status(
+                f"Reinserimento round completato: path={len(current_path)}, "
+                f"standby rimasti={len(current_standby)}"
+            )
         final_path = current_path
         discarded = current_standby
 
@@ -332,6 +368,10 @@ def run_pipeline(image_bytes, opts):
         scale=opts["scale"],
         stroke_width=opts["stroke_width"],
         chunk_size=opts["chunk_size"],
+    )
+    emit_status(
+        "SVG pronto: "
+        f"path chunk={opts['chunk_size']} | punti finali={len(final_path)}"
     )
     summary = (
         f"Punti iniziali: {len(points)} | "
@@ -346,9 +386,3 @@ def run_pipeline_browser(image_bytes, options):
         image_bytes = bytes(image_bytes)
     svg_str, summary = run_pipeline(image_bytes, options)
     return {"svg": svg_str, "summary": summary}
-    download.download = (
-        f"{upload.name.rsplit('.', 1)[0]}-stitch.svg" if upload.name else "stitch.svg"
-    )
-    download.style.display = "inline-block"
-
-    status.innerText = summary
