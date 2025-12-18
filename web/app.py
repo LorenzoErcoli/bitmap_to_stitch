@@ -291,6 +291,7 @@ def run_pipeline(image_bytes, opts):
     if not points:
         raise ValueError("Nessun pixel nero trovato con la soglia corrente.")
 
+    initial_points = len(points)
     if opts["style"] == "degrade":
         seed = int(opts["degrade_seed"]) if opts["degrade_seed"] else None
         emit_status(
@@ -307,13 +308,17 @@ def run_pipeline(image_bytes, opts):
     elif opts["grid_cell_size"] > 1:
         emit_status(f"Regolarizzo la griglia (cell={opts['grid_cell_size']} px)...")
         points = regularize_points_on_grid(points, opts["grid_cell_size"])
+        emit_status(
+            f"Punti dopo griglia: {len(points)} "
+            f"(prima {initial_points}, riduzione {initial_points - len(points)})"
+        )
 
     if opts["max_points"] > 0:
         before = len(points)
         points = subsample_points(points, max_points=opts["max_points"])
         emit_status(
             f"Limite max-points: {len(points)} rimanenti "
-            f"(prima {before}, riduzione {-len(points)+before})"
+            f"(prima {before}, riduzione {before - len(points)})"
         )
 
     if not points:
