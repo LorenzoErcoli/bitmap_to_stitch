@@ -72,13 +72,21 @@ async function handleConvert() {
     const runPipeline = pyodide.globals.get("run_pipeline_browser");
     const pyBytes = pyodide.toPy(imageBytes);
     const pyOptions = pyodide.toPy(options);
-    const result = runPipeline(pyBytes, pyOptions).toJs();
+    const resultProxy = runPipeline(pyBytes, pyOptions);
+    const result = resultProxy.toJs({
+      create_proxies: false,
+      dict_converter: Object.fromEntries,
+    });
+    resultProxy.destroy();
     pyBytes.destroy();
     pyOptions.destroy();
     runPipeline.destroy();
 
+    console.log("Result summary:", result.summary);
+
     const svgStr = result.svg;
     const summary = result.summary;
+    console.log("SVG preview:", svgStr.slice(0, 120));
 
     const blob = new Blob([svgStr], { type: "image/svg+xml" });
     const url = URL.createObjectURL(blob);
