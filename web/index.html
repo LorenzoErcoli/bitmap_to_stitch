@@ -2,13 +2,12 @@
 <html lang="it">
   <head>
     <meta charset="utf-8" />
-    <title>Bitmap → Stitch (PyScript)</title>
-    <script defer src="https://pyscript.net/latest/pyscript.js"></script>
-    <script type="py-config">
-      {
-        "packages": ["numpy", "pillow"]
-      }
-    </script>
+    <title>Bitmap → Stitch (Web)</title>
+    <script
+      defer
+      src="https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js"
+    ></script>
+    <script type="module" defer src="main.js"></script>
     <style>
       :root {
         font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
@@ -215,7 +214,7 @@
       </fieldset>
 
       <div class="actions">
-        <button id="convert" py-click="convert_image">Genera SVG</button>
+        <button id="convert">Genera SVG</button>
         <a id="download-link" href="#" download="bitmap-stitch.svg"
           >Scarica SVG</a
         >
@@ -248,7 +247,5 @@
         refreshControls();
       })();
     </script>
-
-    <script type="py" src="app.py"></script>
   </body>
 </html>

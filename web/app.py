@@ -1,11 +1,8 @@
 import io
 import math
-from js import Blob, document, Uint8Array, URL, console
 
 import numpy as np
 from PIL import Image
-
-LAST_URL = None
 
 
 def load_points_from_bytes(data, max_width=None, threshold=200):
@@ -273,48 +270,6 @@ def build_svg_single_path(points, scale=1.0, stroke_width=0.3, chunk_size=0):
     return svg
 
 
-def parse_int(element_id, default=0):
-    raw = document.getElementById(element_id).value.strip()
-    if not raw:
-        return default
-    try:
-        return int(raw)
-    except ValueError:
-        return default
-
-
-def parse_float(element_id, default=0.0):
-    raw = document.getElementById(element_id).value.strip()
-    if not raw:
-        return default
-    try:
-        return float(raw)
-    except ValueError:
-        return default
-
-
-def read_options():
-    style = document.getElementById("style").value
-    return {
-        "style": style,
-        "max_width": parse_int("max-width", 0),
-        "threshold": parse_int("threshold", 200),
-        "max_points": parse_int("max-points", 0),
-        "scale": parse_float("scale", 1.0),
-        "stroke_width": parse_float("stroke-width", 0.3),
-        "min_dist": parse_float("min-dist", 0.0),
-        "reinsertion_rounds": parse_int("reinsertion", 1),
-        "chunk_size": parse_int("chunk-size", 0),
-        "ordering": document.getElementById("ordering").value,
-        "scanline_band": parse_int("scanline-band", 4),
-        "serpentine": document.getElementById("serpentine").checked,
-        "grid_cell_size": parse_int("grid-cell", 0),
-        "degrade_drop": parse_float("degrade-drop", 0.0),
-        "degrade_jitter": parse_float("degrade-jitter", 0.0),
-        "degrade_seed": document.getElementById("degrade-seed").value.strip(),
-    }
-
-
 def run_pipeline(image_bytes, opts):
     max_width = opts["max_width"] if opts["max_width"] > 0 else None
     points, size = load_points_from_bytes(
@@ -386,38 +341,11 @@ def run_pipeline(image_bytes, opts):
     return svg_str, summary
 
 
-async def convert_image(event=None):
-    status = document.getElementById("status")
-    download = document.getElementById("download-link")
-    download.style.display = "none"
-    status.innerText = "Elaborazione in corso..."
-    console.log("Genera SVG premuto")
-
-    file_input = document.getElementById("image")
-    if file_input.files.length == 0:
-        status.innerText = "Seleziona un'immagine prima di procedere."
-        return
-
-    upload = file_input.files.item(0)
-    array_buffer = await upload.arrayBuffer()
-    byte_data = bytes(Uint8Array.new(array_buffer))
-
-    try:
-        options = read_options()
-        svg_str, summary = run_pipeline(byte_data, options)
-    except Exception as exc:  # noqa: BLE001
-        status.innerText = f"Errore: {exc}"
-        print(f"Errore durante la conversione: {exc}")  # noqa: T201
-        return
-
-    global LAST_URL
-    if LAST_URL:
-        URL.revokeObjectURL(LAST_URL)
-
-    blob = Blob.new([svg_str], {"type": "image/svg+xml"})
-    url = URL.createObjectURL(blob)
-    LAST_URL = url
-    download.href = url
+def run_pipeline_browser(image_bytes, options):
+    if not isinstance(image_bytes, (bytes, bytearray)):
+        image_bytes = bytes(image_bytes)
+    svg_str, summary = run_pipeline(image_bytes, options)
+    return {"svg": svg_str, "summary": summary}
     download.download = (
         f"{upload.name.rsplit('.', 1)[0]}-stitch.svg" if upload.name else "stitch.svg"
     )
