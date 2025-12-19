@@ -2,7 +2,7 @@
   "stitch_count": 353,
   "avg_stitch_length_mm": 2.6914261557708454,
   "min_stitch_length_mm": 0.6999999999999993,
-  "max_stitch_length_mm": 3.6055512754639896,
+  "max_stitch_length_mm": 3.605551275463989,
   "total_path_length_mm": 941.9991545197959,
   "jump_like_segments": 1,
   "angle_histogram_deg": [

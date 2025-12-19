@@ -6,20 +6,20 @@
     "tatami": 1
   },
   "paths": {
-    "dst": "items\\base_punto_canvas_2_pass\\source.dst",
-    "stitch_ir": "items\\base_punto_canvas_2_pass\\stitch_ir.json",
-    "stats": "items\\base_punto_canvas_2_pass\\stats.json",
-    "recipe": "items\\base_punto_canvas_2_pass\\recipe.yaml",
-    "preview": "items\\base_punto_canvas_2_pass\\preview.png"
+    "dst": "items/base_punto_canvas_2_pass/source.dst",
+    "stitch_ir": "items/base_punto_canvas_2_pass/stitch_ir.json",
+    "stats": "items/base_punto_canvas_2_pass/stats.json",
+    "recipe": "items/base_punto_canvas_2_pass/recipe.yaml",
+    "preview": "items/base_punto_canvas_2_pass/preview.png"
   },
-  "generated_at": "2025-12-18T16:49:10+00:00",
+  "generated_at": "2025-12-18T22:24:11+00:00",
   "bounds_mm": {
     "minx": -350.3,
     "miny": -560.6,
     "maxx": 350.3,
     "maxy": 560.7
   },
-  "description": "Auto import BASE PUNTO CANVAS 2 PASS",
+  "description": "BASE PUNTO CANVAS 2 PASS",
   "density_range_pts_per_mm2": {
     "min": 0.8467273815997702,
     "max": 0.8467273815997702

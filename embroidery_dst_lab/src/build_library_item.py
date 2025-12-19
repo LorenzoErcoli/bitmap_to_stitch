@@ -38,6 +38,20 @@ def _relative(path: Path, base: Path) -> str:
         return str(path)
 
 
+IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff", ".bmp"}
+
+
+def _copy_optional_asset(src: Path | None, dest_dir: Path, basename: str) -> Optional[Path]:
+    if src is None:
+        return None
+    if not src.exists():
+        raise FileNotFoundError(src)
+    suffix = src.suffix.lower()
+    dest = dest_dir / f"{basename}{suffix}"
+    shutil.copy2(src, dest)
+    return dest
+
+
 def _build_manifest(
     item_id: str,
     dst_copy: Path,
@@ -48,6 +62,9 @@ def _build_manifest(
     stats: Dict[str, Any],
     description: str | None = None,
     density_range: Dict[str, float] | None = None,
+    artwork_path: Path | None = None,
+    stitched_photo_path: Path | None = None,
+    metadata: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     manifest = {
         "id": item_id,
@@ -62,6 +79,10 @@ def _build_manifest(
         },
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
+    if artwork_path is not None:
+        manifest["paths"]["artwork"] = str(artwork_path)
+    if stitched_photo_path is not None:
+        manifest["paths"]["stitched_photo"] = str(stitched_photo_path)
     if preview_path is not None:
         manifest["paths"]["preview"] = str(preview_path)
     bounds = stats.get("layers", [])
@@ -71,6 +92,8 @@ def _build_manifest(
         manifest["description"] = description
     if density_range:
         manifest["density_range_pts_per_mm2"] = density_range
+    if metadata:
+        manifest["metadata"] = metadata
     return manifest
 
 
@@ -81,6 +104,9 @@ def package_dst(
     label: str | None = None,
     description: str | None = None,
     skip_preview: bool = False,
+    artwork: Path | None = None,
+    stitched_photo: Path | None = None,
+    metadata: Optional[Dict[str, Any]] = None,
 ) -> Path:
     if not dst_path.exists():
         raise FileNotFoundError(dst_path)
@@ -132,6 +158,28 @@ def package_dst(
         "layer_classification_summary", {}
     )
 
+    artwork_copy = _copy_optional_asset(artwork, item_dir, "artwork")
+    stitched_photo_copy = _copy_optional_asset(stitched_photo, item_dir, "stitched_photo")
+    if artwork_copy:
+        recipe.setdefault("source_assets", {})["artwork"] = _relative(artwork_copy, library_root)
+    if stitched_photo_copy:
+        recipe.setdefault("source_assets", {})["stitched_photo"] = _relative(
+            stitched_photo_copy, library_root
+        )
+    normalized_metadata: Dict[str, Any] = {}
+    if metadata:
+        for key, value in metadata.items():
+            if value is None:
+                continue
+            if key == "tags":
+                cleaned_tags = [t for t in value if t]
+                if cleaned_tags:
+                    normalized_metadata[key] = cleaned_tags
+            else:
+                normalized_metadata[key] = value
+    if normalized_metadata:
+        recipe["metadata"] = normalized_metadata
+
     recipe_json_path = item_dir / "recipe.json"
     recipe_yaml_path = item_dir / "recipe.yaml"
     _write_json(recipe_json_path, recipe)
@@ -161,6 +209,11 @@ def package_dst(
         stats,
         description=final_description,
         density_range=density_range,
+        artwork_path=Path(_relative(artwork_copy, library_root)) if artwork_copy else None,
+        stitched_photo_path=Path(_relative(stitched_photo_copy, library_root))
+        if stitched_photo_copy
+        else None,
+        metadata=normalized_metadata,
     )
     manifest_path = item_dir / "manifest.json"
     _write_json(manifest_path, manifest)
@@ -182,6 +235,14 @@ def package_dst(
         index_entry["description"] = final_description
     if density_range:
         index_entry["density_range_pts_per_mm2"] = density_range
+    if artwork_copy:
+        index_entry.setdefault("paths", {})["artwork"] = _relative(artwork_copy, library_root)
+    if stitched_photo_copy:
+        index_entry.setdefault("paths", {})["stitched_photo"] = _relative(
+            stitched_photo_copy, library_root
+        )
+    if normalized_metadata:
+        index_entry["metadata"] = normalized_metadata
     index["items"][item_id] = index_entry
 
     _write_json(index_path, index)
@@ -222,7 +283,64 @@ def main() -> None:
         action="store_true",
         help="Skip PNG preview generation (useful on headless setups without matplotlib).",
     )
+    parser.add_argument(
+        "--artwork",
+        default=None,
+        help="Optional path to the original artwork bitmap used to program the DST.",
+    )
+    parser.add_argument(
+        "--stitched-photo",
+        default=None,
+        help="Optional path to a photo of the stitched result.",
+    )
+    parser.add_argument(
+        "--subject",
+        default=None,
+        help="Optional subject/category tag (e.g., floral, logo, lettering).",
+    )
+    parser.add_argument(
+        "--tag",
+        action="append",
+        default=[],
+        help="Additional tags; repeatable.",
+    )
+    parser.add_argument(
+        "--fabric",
+        default=None,
+        help="Fabric/support info (e.g., cotton twill, velluto).",
+    )
+    parser.add_argument(
+        "--thread",
+        default=None,
+        help="Thread info (brand/type/colorway) if relevant.",
+    )
+    parser.add_argument(
+        "--stabilizer",
+        default=None,
+        help="Stabilizer/backing used.",
+    )
+    parser.add_argument(
+        "--quality-score",
+        type=int,
+        default=None,
+        help="Optional quality rating 1-5 of the stitched result.",
+    )
+    parser.add_argument(
+        "--notes",
+        default=None,
+        help="Free-text notes (defects, machine, tension, operator).",
+    )
     args = parser.parse_args()
+
+    metadata = {
+        "subject": args.subject,
+        "tags": args.tag,
+        "fabric": args.fabric,
+        "thread": args.thread,
+        "stabilizer": args.stabilizer,
+        "quality_score": args.quality_score,
+        "notes": args.notes,
+    }
 
     item_dir = package_dst(
         dst_path=Path(args.dst),
@@ -231,6 +349,9 @@ def main() -> None:
         label=args.label,
         description=args.description,
         skip_preview=args.skip_preview,
+        artwork=Path(args.artwork) if args.artwork else None,
+        stitched_photo=Path(args.stitched_photo) if args.stitched_photo else None,
+        metadata=metadata,
     )
     print(f"Library item packaged under {item_dir}")
 

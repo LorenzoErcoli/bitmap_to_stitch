@@ -2,8 +2,8 @@
   "stitch_count": 273,
   "avg_stitch_length_mm": 2.6863114019761993,
   "min_stitch_length_mm": 0.6999999999999993,
-  "max_stitch_length_mm": 3.6221540552549665,
-  "total_path_length_mm": 725.3040785335738,
+  "max_stitch_length_mm": 3.622154055254967,
+  "total_path_length_mm": 725.304078533574,
   "jump_like_segments": 1,
   "angle_histogram_deg": [
     0,
@@ -23,7 +23,7 @@
     {
       "color": 0,
       "stitch_count": 273,
-      "path_length_mm": 725.3040785335738,
+      "path_length_mm": 725.304078533574,
       "avg_stitch_length_mm": 2.6863114019761993,
       "std_stitch_length_mm": 0.6651855322790838,
       "hull_area_mm2": 230.89499999999998,

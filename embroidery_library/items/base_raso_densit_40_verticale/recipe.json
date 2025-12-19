@@ -1,6 +1,6 @@
 {
   "id": "base_raso_densit_40_verticale",
-  "source": "items\\base_raso_densit_40_verticale\\source.dst",
+  "source": "items/base_raso_densit_40_verticale/source.dst",
   "tags": {
     "material": [],
     "object": [],
@@ -8,7 +8,7 @@
   },
   "stitch_profile": {
     "avg_stitch_length_mm": 2.698933865520761,
-    "max_stitch_length_mm": 3.612478373637688,
+    "max_stitch_length_mm": 3.6124783736376878,
     "directionality_histogram_deg": [
       0,
       0,
@@ -27,9 +27,9 @@
       {
         "color": 0,
         "stitch_count": 352,
-        "path_length_mm": 941.9279190667456,
+        "path_length_mm": 941.927919066746,
         "avg_stitch_length_mm": 2.698933865520761,
-        "std_stitch_length_mm": 0.6631496443965069,
+        "std_stitch_length_mm": 0.6631496443965068,
         "hull_area_mm2": 230.46,
         "bounds": {
           "minx": -15.0,
@@ -70,9 +70,9 @@
     "Parameters estimated via pyembroidery + numpy pipeline."
   ],
   "examples": [
-    "items\\base_raso_densit_40_verticale\\preview.png",
-    "items\\base_raso_densit_40_verticale\\stitch_ir.json"
+    "items/base_raso_densit_40_verticale/preview.png",
+    "items/base_raso_densit_40_verticale/stitch_ir.json"
   ],
   "label": "BASE RASO DENSIT\u00e0 40 VERTICALE",
-  "description": "Auto import BASE RASO DENSIT\u00e0 40 VERTICALE"
+  "description": "BASE RASO DENSIT\u00e0 40 VERTICALE"
 }

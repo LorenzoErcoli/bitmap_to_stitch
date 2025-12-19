@@ -1,6 +1,6 @@
 {
   "id": "base_punto_canvas_2_pass",
-  "source": "items\\base_punto_canvas_2_pass\\source.dst",
+  "source": "items/base_punto_canvas_2_pass/source.dst",
   "tags": {
     "material": [],
     "object": [],
@@ -27,9 +27,9 @@
       {
         "color": 0,
         "stitch_count": 665166,
-        "path_length_mm": 1676743.1863058007,
+        "path_length_mm": 1676743.1863011091,
         "avg_stitch_length_mm": 2.521149149949104,
-        "std_stitch_length_mm": 1.4133037356998925,
+        "std_stitch_length_mm": 1.413303735699892,
         "hull_area_mm2": 785572.8,
         "bounds": {
           "minx": -350.3,
@@ -70,9 +70,9 @@
     "Parameters estimated via pyembroidery + numpy pipeline."
   ],
   "examples": [
-    "items\\base_punto_canvas_2_pass\\preview.png",
-    "items\\base_punto_canvas_2_pass\\stitch_ir.json"
+    "items/base_punto_canvas_2_pass/preview.png",
+    "items/base_punto_canvas_2_pass/stitch_ir.json"
   ],
   "label": "BASE PUNTO CANVAS 2 PASS",
-  "description": "Auto import BASE PUNTO CANVAS 2 PASS"
+  "description": "BASE PUNTO CANVAS 2 PASS"
 }

@@ -1,12 +1,12 @@
 id: base_raso_densit_40_orizzontale
-source: items\base_raso_densit_40_orizzontale\source.dst
+source: items/base_raso_densit_40_orizzontale/source.dst
 tags:
   material: []
   object: []
   source: dst_import
 stitch_profile:
   avg_stitch_length_mm: 2.6914261557708454
-  max_stitch_length_mm: 3.6055512754639896
+  max_stitch_length_mm: 3.605551275463989
   directionality_histogram_deg:
   - 0
   - 0
@@ -59,7 +59,7 @@ notes:
 - Derived automatically from DST data.
 - Parameters estimated via pyembroidery + numpy pipeline.
 examples:
-- items\base_raso_densit_40_orizzontale\preview.png
-- items\base_raso_densit_40_orizzontale\stitch_ir.json
+- items/base_raso_densit_40_orizzontale/preview.png
+- items/base_raso_densit_40_orizzontale/stitch_ir.json
 label: "BASE RASO DENSIT\xE0 40 ORIZZONTALE"
-description: "Auto import BASE RASO DENSIT\xE0 40 ORIZZONTALE"
+description: "BASE RASO DENSIT\xE0 40 ORIZZONTALE"

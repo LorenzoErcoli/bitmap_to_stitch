@@ -6,9 +6,9 @@ from __future__ import annotations
 import argparse
 import re
 from pathlib import Path
-from typing import Optional
+from typing import Iterable, Optional
 
-from build_library_item import package_dst
+from build_library_item import IMAGE_EXTS, package_dst
 
 
 def slugify(name: str) -> str:
@@ -19,6 +19,30 @@ def slugify(name: str) -> str:
 def item_exists(library_root: Path, item_id: str) -> bool:
     manifest = library_root / "items" / item_id / "manifest.json"
     return manifest.exists()
+
+
+def _parse_suffixes(raw: str) -> list[str]:
+    if not raw:
+        return []
+    return [part.strip() for part in raw.split(",") if part.strip()]
+
+
+def _find_asset(
+    dst_path: Path,
+    suffixes: Iterable[str],
+    allow_plain: bool,
+) -> Optional[Path]:
+    candidates = []
+    if allow_plain:
+        candidates.append(dst_path.stem)
+    for suffix in suffixes:
+        candidates.append(f"{dst_path.stem}{suffix}")
+    for stem in candidates:
+        for ext in IMAGE_EXTS:
+            candidate = dst_path.with_name(f"{stem}{ext}")
+            if candidate.exists():
+                return candidate
+    return None
 
 
 def main() -> None:
@@ -50,6 +74,63 @@ def main() -> None:
         action="store_true",
         help="Force regeneration even if the library item already exists.",
     )
+    parser.add_argument(
+        "--auto-artwork",
+        action="store_true",
+        help="Attach artwork image if found next to the DST (matching stem or provided suffixes).",
+    )
+    parser.add_argument(
+        "--artwork-suffixes",
+        default="_artwork",
+        help="Comma-separated suffixes for artwork lookup (default: _artwork).",
+    )
+    parser.add_argument(
+        "--auto-stitched-photo",
+        action="store_true",
+        help="Attach stitched photo if found next to the DST.",
+    )
+    parser.add_argument(
+        "--stitched-photo-suffixes",
+        default="_stitched,_photo,_ricamo",
+        help="Comma-separated suffixes for stitched photo lookup (default: _stitched,_photo,_ricamo).",
+    )
+    parser.add_argument(
+        "--subject",
+        default=None,
+        help="Subject/category tag applied to all imported items.",
+    )
+    parser.add_argument(
+        "--tag",
+        action="append",
+        default=[],
+        help="Additional tags applied to all imported items; repeatable.",
+    )
+    parser.add_argument(
+        "--fabric",
+        default=None,
+        help="Fabric/support info applied to all items.",
+    )
+    parser.add_argument(
+        "--thread",
+        default=None,
+        help="Thread info applied to all items.",
+    )
+    parser.add_argument(
+        "--stabilizer",
+        default=None,
+        help="Stabilizer/backing info applied to all items.",
+    )
+    parser.add_argument(
+        "--quality-score",
+        type=int,
+        default=None,
+        help="Quality rating 1-5 applied to all items.",
+    )
+    parser.add_argument(
+        "--notes",
+        default=None,
+        help="Notes applied to all items.",
+    )
     args = parser.parse_args()
 
     input_dir = Path(args.input_dir)
@@ -61,6 +142,18 @@ def main() -> None:
 
     created = 0
     skipped = 0
+    artwork_suffixes = _parse_suffixes(args.artwork_suffixes)
+    stitched_suffixes = _parse_suffixes(args.stitched_photo_suffixes)
+    metadata = {
+        "subject": args.subject,
+        "tags": args.tag,
+        "fabric": args.fabric,
+        "thread": args.thread,
+        "stabilizer": args.stabilizer,
+        "quality_score": args.quality_score,
+        "notes": args.notes,
+    }
+
     for dst_path in dst_files:
         name = dst_path.stem
         item_id = slugify(name)
@@ -74,6 +167,14 @@ def main() -> None:
         if args.description_template:
             description = args.description_template.format(name=name, item_id=item_id)
 
+        artwork_path = None
+        if args.auto_artwork:
+            artwork_path = _find_asset(dst_path, artwork_suffixes, allow_plain=True)
+
+        stitched_photo_path = None
+        if args.auto_stitched_photo:
+            stitched_photo_path = _find_asset(dst_path, stitched_suffixes, allow_plain=False)
+
         package_dst(
             dst_path=dst_path,
             item_id=item_id,
@@ -81,6 +182,9 @@ def main() -> None:
             label=None,
             description=description,
             skip_preview=args.skip_preview,
+            artwork=artwork_path,
+            stitched_photo=stitched_photo_path,
+            metadata=metadata,
         )
         print(f"[ok] {dst_path.name} -> {item_id}")
         created += 1

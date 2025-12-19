@@ -3,7 +3,7 @@
   "avg_stitch_length_mm": 1.988001935266147,
   "min_stitch_length_mm": 0.0,
   "max_stitch_length_mm": 12.753430910935304,
-  "total_path_length_mm": 101155.50247214736,
+  "total_path_length_mm": 101155.50247214836,
   "jump_like_segments": 77,
   "angle_histogram_deg": [
     3902,
@@ -23,9 +23,9 @@
     {
       "color": 1,
       "stitch_count": 16713,
-      "path_length_mm": 32078.021933656168,
+      "path_length_mm": 32078.021933656455,
       "avg_stitch_length_mm": 1.922796974983886,
-      "std_stitch_length_mm": 0.6920107560155687,
+      "std_stitch_length_mm": 0.6920107560155686,
       "hull_area_mm2": 19890.855,
       "bounds": {
         "minx": 0.0,
@@ -59,7 +59,7 @@
     {
       "color": 2,
       "stitch_count": 26199,
-      "path_length_mm": 55011.40093579117,
+      "path_length_mm": 55011.4009357926,
       "avg_stitch_length_mm": 2.101998430927025,
       "std_stitch_length_mm": 0.9370160027098571,
       "hull_area_mm2": 19803.395,
@@ -95,9 +95,9 @@
     {
       "color": 3,
       "stitch_count": 8066,
-      "path_length_mm": 14066.079602700027,
+      "path_length_mm": 14066.079602699892,
       "avg_stitch_length_mm": 1.7519092792004018,
-      "std_stitch_length_mm": 0.8183971513753521,
+      "std_stitch_length_mm": 0.818397151375352,
       "hull_area_mm2": 19890.790000000005,
       "bounds": {
         "minx": 0.0,

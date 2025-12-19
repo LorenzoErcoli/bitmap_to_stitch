@@ -1,5 +1,5 @@
 id: floreale_base_punto_mattezzi_effetto_vintage_su_velluto
-source: items\floreale_base_punto_mattezzi_effetto_vintage_su_velluto\source.dst
+source: items/floreale_base_punto_mattezzi_effetto_vintage_su_velluto/source.dst
 tags:
   material: []
   object: []
@@ -23,9 +23,9 @@ stitch_profile:
   layers:
   - color: 1
     stitch_count: 16713
-    path_length_mm: 32078.021933656168
+    path_length_mm: 32078.021933656455
     avg_stitch_length_mm: 1.922796974983886
-    std_stitch_length_mm: 0.6920107560155687
+    std_stitch_length_mm: 0.6920107560155686
     hull_area_mm2: 19890.855
     bounds:
       minx: 0.0
@@ -55,7 +55,7 @@ stitch_profile:
     summary: Layer 1 [tatami] 16713 sts, avg 1.92 mm, 0.84 pts/mm^2, coverage 0.98
   - color: 2
     stitch_count: 26199
-    path_length_mm: 55011.40093579117
+    path_length_mm: 55011.4009357926
     avg_stitch_length_mm: 2.101998430927025
     std_stitch_length_mm: 0.9370160027098571
     hull_area_mm2: 19803.395
@@ -87,9 +87,9 @@ stitch_profile:
     summary: Layer 2 [tatami] 26199 sts, avg 2.10 mm, 1.32 pts/mm^2, coverage 0.98
   - color: 3
     stitch_count: 8066
-    path_length_mm: 14066.079602700027
+    path_length_mm: 14066.079602699892
     avg_stitch_length_mm: 1.7519092792004018
-    std_stitch_length_mm: 0.8183971513753521
+    std_stitch_length_mm: 0.818397151375352
     hull_area_mm2: 19890.790000000005
     bounds:
       minx: 0.0
@@ -124,7 +124,7 @@ notes:
 - Derived automatically from DST data.
 - Parameters estimated via pyembroidery + numpy pipeline.
 examples:
-- items\floreale_base_punto_mattezzi_effetto_vintage_su_velluto\preview.png
-- items\floreale_base_punto_mattezzi_effetto_vintage_su_velluto\stitch_ir.json
+- items/floreale_base_punto_mattezzi_effetto_vintage_su_velluto/preview.png
+- items/floreale_base_punto_mattezzi_effetto_vintage_su_velluto/stitch_ir.json
 label: FLOREALE BASE + PUNTO MATTEZZI EFFETTO VINTAGE - SU VELLUTO
-description: Auto import FLOREALE BASE + PUNTO MATTEZZI EFFETTO VINTAGE - SU VELLUTO
+description: FLOREALE BASE + PUNTO MATTEZZI EFFETTO VINTAGE - SU VELLUTO
