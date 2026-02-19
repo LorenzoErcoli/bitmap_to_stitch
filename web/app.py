@@ -14,6 +14,11 @@ def emit_status(message):
         status_callback(str(message))
 
 
+def emit_progress(percent, message=""):
+    pct = max(0.0, min(100.0, float(percent)))
+    emit_status(f"__PROGRESS__|{pct:.1f}|{message}")
+
+
 def load_points_grouped_from_bytes(
     data, max_width=None, threshold=200, color_count=2
 ):
@@ -81,6 +86,106 @@ def subsample_points(points, max_points=None):
     return [points[i] for i in idx]
 
 
+def allocate_max_points_by_color(color_points, global_max_points):
+    quotas = {color_hex: len(points) for color_hex, points in color_points.items()}
+    if global_max_points is None or global_max_points <= 0:
+        return quotas
+
+    available = {color_hex: len(points) for color_hex, points in color_points.items() if points}
+    if not available:
+        return quotas
+
+    total_available = sum(available.values())
+    budget = min(int(global_max_points), total_available)
+    if budget >= total_available:
+        return quotas
+
+    for color_hex in quotas.keys():
+        quotas[color_hex] = 0
+
+    color_order = sorted(available.keys(), key=lambda c: available[c], reverse=True)
+    active_colors = len(color_order)
+
+    if budget < active_colors:
+        for color_hex in color_order[:budget]:
+            quotas[color_hex] = 1
+        return quotas
+
+    for color_hex in color_order:
+        quotas[color_hex] = 1
+    remaining_budget = budget - active_colors
+
+    if remaining_budget <= 0:
+        return quotas
+
+    residual_capacity = {
+        color_hex: max(0, available[color_hex] - quotas[color_hex])
+        for color_hex in color_order
+    }
+    residual_total = sum(residual_capacity.values())
+    if residual_total <= 0:
+        return quotas
+
+    remainders = []
+    distributed = 0
+    for color_hex in color_order:
+        share = remaining_budget * (residual_capacity[color_hex] / float(residual_total))
+        add = int(math.floor(share))
+        add = min(add, residual_capacity[color_hex])
+        quotas[color_hex] += add
+        distributed += add
+        remainders.append((share - add, color_hex))
+
+    leftover = remaining_budget - distributed
+    if leftover > 0:
+        remainders.sort(key=lambda x: x[0], reverse=True)
+        for _, color_hex in remainders:
+            if leftover <= 0:
+                break
+            headroom = available[color_hex] - quotas[color_hex]
+            if headroom <= 0:
+                continue
+            quotas[color_hex] += 1
+            leftover -= 1
+
+    return quotas
+
+
+def resolve_global_point_budget(color_points, max_points_raw, target_density_raw):
+    total_available = sum(len(points) for points in color_points.values())
+    max_points = int(max_points_raw or 0)
+    try:
+        density = float(target_density_raw or 0.0)
+    except (TypeError, ValueError):
+        density = 0.0
+    density = max(0.0, min(100.0, density))
+
+    budget_from_density = 0
+    if density > 0.0 and total_available > 0:
+        budget_from_density = int(
+            math.ceil(total_available * (density / 100.0))
+        )
+        budget_from_density = min(budget_from_density, total_available)
+
+    if budget_from_density > 0 and max_points > 0:
+        budget = min(max_points, budget_from_density)
+        mode = "density+cap"
+    elif budget_from_density > 0:
+        budget = budget_from_density
+        mode = "density"
+    else:
+        budget = max_points
+        mode = "max_points" if max_points > 0 else "none"
+
+    return {
+        "total_available": total_available,
+        "density": density,
+        "budget_from_density": budget_from_density,
+        "budget": max(0, int(budget or 0)),
+        "mode": mode,
+    }
+
+
 def order_points_nearest_neighbor(points):
     n = len(points)
     if n == 0:
@@ -137,8 +242,8 @@ def order_points_scanline(points, band_height=4, serpentine=True):
 
 
 def regularize_points_on_grid(points, cell_size):
-    cs = int(cell_size)
-    if cs <= 1 or not points:
+    cs = float(cell_size)
+    if cs <= 1.0 or not points:
         return points
     buckets = {}
     for x, y in points:
@@ -342,7 +447,13 @@ def build_svg_for_paths(
 
 
 def process_color_points(
-    points, opts, image_size, color_hex, color_idx=0, seed_base=None
+    points,
+    opts,
+    image_size,
+    color_hex,
+    color_idx=0,
+    seed_base=None,
+    max_points_for_color=0,
 ):
     working = points[:]
     initial_points = len(working)
@@ -356,6 +467,20 @@ def process_color_points(
             "final_points": 0,
             "discarded_points": 0,
         }
+
+    analysis_cell_mm = float(opts.get("analysis_cell_mm", 0.0) or 0.0)
+    if analysis_cell_mm >= 1.0 and opts["scale"] > 0:
+        cell_px = analysis_cell_mm / float(opts["scale"])
+        if cell_px > 1.0:
+            before = len(working)
+            working = regularize_points_on_grid(working, cell_px)
+            emit_status(
+                f"{color_hex}: analisi griglia metrica {analysis_cell_mm:.2f} mm ({cell_px:.2f} px) -> {len(working)} punti (prima {before})"
+            )
+        else:
+            emit_status(
+                f"{color_hex}: analysis-cell {analysis_cell_mm:.2f} mm troppo fine rispetto alla scala corrente ({opts['scale']:.4f}); nessuna regolarizzazione metrica."
+            )
 
     if opts["style"] == "degrade":
         seed = (seed_base + color_idx) if seed_base is not None else None
@@ -373,7 +498,7 @@ def process_color_points(
         emit_status(f"{color_hex}: regolarizzo griglia (cell={opts['grid_cell_size']} px)")
         working = regularize_points_on_grid(working, opts["grid_cell_size"])
 
-    max_points = opts.get("max_points", 0)
+    max_points = int(max_points_for_color) if max_points_for_color else 0
     if max_points > 0 and len(working) > max_points:
         before = len(working)
         working = subsample_points(working, max_points=max_points)
@@ -424,11 +549,24 @@ def process_color_points(
         "initial_points": initial_points,
         "final_points": len(final_path),
         "discarded_points": len(discarded),
+        "allocated_max_points": max_points,
     }
 
 
 def run_pipeline(image_bytes, opts):
+    emit_progress(22, "Avvio pipeline")
     emit_status("=== Inizio nuova conversione ===")
+    try:
+        analysis_cell_mm = float(opts.get("analysis_cell_mm", 0.0) or 0.0)
+    except (TypeError, ValueError):
+        analysis_cell_mm = 0.0
+    if 0.0 < analysis_cell_mm < 1.0:
+        emit_status(
+            f"analysis-cell impostato a {analysis_cell_mm:.2f} mm: applico minimo 1.00 mm."
+        )
+        analysis_cell_mm = 1.0
+    opts["analysis_cell_mm"] = analysis_cell_mm
+
     max_width = opts["max_width"] if opts["max_width"] > 0 else None
     color_count = max(1, int(opts.get("color_count", 1)))
     color_points, size = load_points_grouped_from_bytes(
@@ -441,6 +579,7 @@ def run_pipeline(image_bytes, opts):
         raise ValueError(
             "Nessun pixel utile trovato con la soglia/colori correnti. Prova ad abbassare la soglia o aumentare i colori."
         )
+    emit_progress(35, "Bitmap analizzata")
 
     emit_status(f"Colori trovati: {len(color_points)} (richiesti {color_count})")
     base_seed = None
@@ -452,8 +591,35 @@ def run_pipeline(image_bytes, opts):
             except (TypeError, ValueError):
                 base_seed = None
 
+    budget_info = resolve_global_point_budget(
+        color_points,
+        opts.get("max_points", 0),
+        opts.get("target_density", 0.0),
+    )
+    global_max_points = budget_info["budget"]
+    per_color_max = allocate_max_points_by_color(color_points, global_max_points)
+    if global_max_points > 0:
+        total_allocated = sum(per_color_max.values())
+        if budget_info["mode"] == "density":
+            emit_status(
+                f"Budget da densita={budget_info['density']:.2f}% -> {global_max_points} punti globali, distribuiti={total_allocated}."
+            )
+        elif budget_info["mode"] == "density+cap":
+            emit_status(
+                "Budget da densita "
+                f"{budget_info['density']:.2f}% -> {budget_info['budget_from_density']} "
+                f"con cap max-points={int(opts.get('max_points', 0) or 0)}: uso {global_max_points}, distribuiti={total_allocated}."
+            )
+        else:
+            emit_status(
+                f"Budget max-points globale={global_max_points}, distribuito={total_allocated} sui colori attivi."
+            )
+    emit_progress(42, "Budget punti definito")
+
     color_results = []
-    for idx, color_hex in enumerate(sorted(color_points.keys())):
+    ordered_colors = sorted(color_points.keys())
+    color_count_total = len(ordered_colors)
+    for idx, color_hex in enumerate(ordered_colors):
         result = process_color_points(
             color_points[color_hex],
             opts,
@@ -461,8 +627,15 @@ def run_pipeline(image_bytes, opts):
             color_hex,
             color_idx=idx,
             seed_base=base_seed,
+            max_points_for_color=per_color_max.get(color_hex, 0),
         )
         color_results.append(result)
+        progress_span = 45.0
+        progress_base = 45.0
+        emit_progress(
+            progress_base + progress_span * ((idx + 1) / float(max(1, color_count_total))),
+            f"Elaboro colori {idx + 1}/{color_count_total}",
+        )
 
     final_paths = [
         (res["color"], res["path"]) for res in color_results if res["path"]
@@ -479,6 +652,7 @@ def run_pipeline(image_bytes, opts):
         stroke_width=opts["stroke_width"],
         chunk_size=opts["chunk_size"],
     )
+    emit_progress(93, "SVG combinato creato")
     emit_status(
         f"SVG combinato pronto: colori attivi={len(final_paths)}, chunk={opts['chunk_size']}"
     )
@@ -516,6 +690,7 @@ def run_pipeline(image_bytes, opts):
                 "initial_points": res["initial_points"],
                 "final_points": res["final_points"],
                 "discarded_points": res["discarded_points"],
+                "allocated_max_points": res.get("allocated_max_points", 0),
                 "svg": single_svg,
             }
         )
@@ -524,10 +699,16 @@ def run_pipeline(image_bytes, opts):
         f"Colori elaborati: {len(final_paths)} su {len(color_results)} totali"
     ]
     for res in color_results:
+        density_ratio = (
+            (100.0 * res["final_points"] / res["initial_points"])
+            if res["initial_points"] > 0
+            else 0.0
+        )
         summary_lines.append(
-            f"{res['color']} -> iniziali {res['initial_points']} | finali {res['final_points']} | scartati {res['discarded_points']}"
+            f"{res['color']} -> iniziali {res['initial_points']} | finali {res['final_points']} | scartati {res['discarded_points']} | densita {density_ratio:.1f}%"
         )
     summary = "\n".join(summary_lines)
+    emit_progress(98, "Output pronto")
     return svg_str, summary, color_payload, mono_svg
 
 
@@ -535,6 +716,7 @@ def run_pipeline_browser(image_bytes, options):
     if not isinstance(image_bytes, (bytes, bytearray)):
         image_bytes = bytes(image_bytes)
     multi_svg, summary, colors, mono_svg = run_pipeline(image_bytes, options)
+    emit_progress(100, "Conversione completata")
     return {
         "svg": multi_svg,
         "mono_svg": mono_svg,

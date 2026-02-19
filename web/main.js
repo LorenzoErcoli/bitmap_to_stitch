@@ -2,22 +2,39 @@ const statusEl = document.getElementById("status");
 const downloadEl = document.getElementById("download-link");
 const multiDownloadEl = document.getElementById("download-multi");
 const colorDownloadsEl = document.getElementById("color-downloads");
+const progressBarEl = document.getElementById("progress-bar");
+const progressTextEl = document.getElementById("progress-text");
 const convertBtn = document.getElementById("convert");
 let pyodideReady = null;
 let colorDownloadUrls = [];
 let monoDownloadUrl = null;
 let multiDownloadUrl = null;
 
+function setProgress(value, label = "") {
+  const pct = Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
+  if (progressBarEl) {
+    progressBarEl.style.width = `${pct}%`;
+  }
+  if (progressTextEl) {
+    progressTextEl.textContent = label
+      ? `Avanzamento: ${pct}% - ${label}`
+      : `Avanzamento: ${pct}%`;
+  }
+}
+
 async function initPyodide() {
   if (!pyodideReady) {
+    setProgress(5, "Carico runtime");
     statusEl.textContent = "Carico runtime Python...";
     pyodideReady = (async () => {
       const pyodide = await loadPyodide({
         indexURL: "https://cdn.jsdelivr.net/pyodide/v0.24.1/full/",
       });
       await pyodide.loadPackage(["numpy", "pillow"]);
+      setProgress(12, "Runtime pronto");
       const appSource = await fetch("app.py").then((res) => res.text());
       await pyodide.runPythonAsync(appSource);
+      setProgress(18, "Pipeline caricata");
       return pyodide;
     })();
   }
@@ -38,7 +55,9 @@ function readOptions() {
     max_width: num("max-width", 0, parseInt),
     threshold: num("threshold", 200, parseInt),
     max_points: num("max-points", 0, parseInt),
+    target_density: num("target-density", 0.0),
     scale: num("scale", 1.0),
+    analysis_cell_mm: num("analysis-cell-mm", 0.0),
     stroke_width: num("stroke-width", 0.3),
     min_dist: num("min-dist", 1.0),
     reinsertion_rounds: num("reinsertion", 1, parseInt),
@@ -147,6 +166,7 @@ async function handleConvert() {
     statusHistory.push(msg);
     statusEl.innerText = statusHistory.join("\n");
   };
+  setProgress(0, "In attesa");
 
   const fileInput = document.getElementById("image");
   if (fileInput.files.length === 0) {
@@ -156,20 +176,31 @@ async function handleConvert() {
 
   const file = fileInput.files[0];
   pushStatus("Carico runtime Python...");
+  setProgress(4, "Inizializzo");
   const pyodide = await initPyodide();
 
   pushStatus("Lettura immagine...");
+  setProgress(20, "Lettura immagine");
   const arrayBuffer = await file.arrayBuffer();
   const imageBytes = new Uint8Array(arrayBuffer);
   const options = readOptions();
 
   const reportStatus = pyodide.toPy((msg) => {
-    pushStatus(msg);
+    const text = String(msg || "");
+    if (text.startsWith("__PROGRESS__|")) {
+      const parts = text.split("|");
+      const pct = parts.length > 1 ? parseFloat(parts[1]) : 0;
+      const label = parts.length > 2 ? parts.slice(2).join("|") : "";
+      setProgress(pct, label);
+      return;
+    }
+    pushStatus(text);
   });
   pyodide.globals.set("status_callback", reportStatus);
 
   try {
     pushStatus("Elaborazione in corso...");
+    setProgress(25, "Elaborazione");
     const runPipeline = pyodide.globals.get("run_pipeline_browser");
     const pyBytes = pyodide.toPy(imageBytes);
     const pyOptions = pyodide.toPy(options);
@@ -211,9 +242,11 @@ async function handleConvert() {
     downloadEl.style.display = "inline-block";
 
     renderColorDownloads(result.colors || [], baseName);
+    setProgress(100, "Completato");
     pushStatus(summary);
   } catch (error) {
     console.error("Errore durante la conversione:", error);
+    setProgress(100, "Errore");
     pushStatus(`Errore: ${error.message || error}`);
   } finally {
     pyodide.runPython("status_callback = None");
