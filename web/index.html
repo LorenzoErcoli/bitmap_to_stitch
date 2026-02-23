@@ -315,6 +315,14 @@
             <input type="number" id="threshold" min="0" max="255" value="200" />
           </div>
           <div class="control">
+            <label for="sample-colors">Sample colors <span class="info-tip" tabindex="0" data-tip="Lista colori da campionare (es. #000000,#FF0000). Vengono aggiunti alla selezione basata su soglia.">i</span></label>
+            <input type="text" id="sample-colors" placeholder="#000000,#FF0000" />
+          </div>
+          <div class="control">
+            <label for="sample-tolerance">Sample tolerance <span class="info-tip" tabindex="0" data-tip="Tolleranza colore RGB (0 = match esatto).">i</span></label>
+            <input type="number" id="sample-tolerance" min="0" step="1" value="24" />
+          </div>
+          <div class="control">
             <label for="color-count">Numero colori <span class="info-tip" tabindex="0" data-tip="Numero cluster colore usati in quantizzazione (1-12).">i</span></label>
             <input type="number" id="color-count" min="1" max="12" value="2" />
           </div>
@@ -341,12 +349,16 @@
               <label for="analysis-cell-mm">Analysis square (mm) <span class="info-tip" tabindex="0" data-tip="Regolarizza i punti su una griglia in millimetri (minimo 1 mm quando attivo).">i</span></label>
               <input type="number" id="analysis-cell-mm" min="0" step="0.1" value="0" />
             </div>
+            <div class="control">
+              <label for="default-dpi">Default DPI <span class="info-tip" tabindex="0" data-tip="Usato per conversioni mm quando l'immagine non contiene DPI.">i</span></label>
+              <input type="number" id="default-dpi" min="1" step="1" value="96" />
+            </div>
           <div class="control">
             <label for="stroke-width">Stroke width <span class="info-tip" tabindex="0" data-tip="Spessore linea nel file SVG esportato.">i</span></label>
             <input type="number" id="stroke-width" step="0.1" value="0.3" />
           </div>
           <div class="control">
-            <label for="min-dist">Min dist <span class="info-tip" tabindex="0" data-tip="Distanza minima tra punti consecutivi: riduce densita locale e sovrapposizioni.">i</span></label>
+            <label for="min-dist">Min dist (mm) <span class="info-tip" tabindex="0" data-tip="Distanza minima in millimetri reali tra punti consecutivi.">i</span></label>
             <input type="number" id="min-dist" step="0.1" value="1.0" />
           </div>
           <div class="control">
@@ -478,6 +490,14 @@
               <p>Più alta = include piu pixel scuri; piu bassa = selezione piu stretta.</p>
             </article>
             <article class="help-card">
+              <h3>Sample colors</h3>
+              <p>Lista colori target (es. #000000,#FF0000). Vengono aggiunti alla selezione basata su soglia.</p>
+            </article>
+            <article class="help-card">
+              <h3>Sample tolerance</h3>
+              <p>Tolleranza RGB per il campionamento colore (0 = match esatto).</p>
+            </article>
+            <article class="help-card">
               <h3>Numero colori</h3>
               <p>Quantizzazione colori dell'immagine (1-12).</p>
             </article>
@@ -498,12 +518,16 @@
               <p>Regolarizza i punti su quadrati in mm (se attivo, minimo 1 mm).</p>
             </article>
             <article class="help-card">
+              <h3>Default DPI</h3>
+              <p>Usato per conversioni mm quando il file sorgente non ha metadati DPI.</p>
+            </article>
+            <article class="help-card">
               <h3>Stroke width</h3>
               <p>Spessore linea in SVG per preview/esportazione.</p>
             </article>
             <article class="help-card">
-              <h3>Min dist</h3>
-              <p>Distanza minima tra punti consecutivi (filtra addensamenti).</p>
+              <h3>Min dist (mm)</h3>
+              <p>Distanza minima reale in millimetri tra punti consecutivi (filtra addensamenti).</p>
             </article>
             <article class="help-card">
               <h3>Reinsertion rounds</h3>

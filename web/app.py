@@ -8,6 +8,84 @@ from PIL import Image
 status_callback = None
 
 
+def extract_source_dpi(image_info):
+    """
+    Estrae DPI da metadati comuni (dpi o JFIF).
+    Ritorna (dpi_x, dpi_y) oppure None.
+    """
+    dpi = image_info.get("dpi")
+    if isinstance(dpi, (tuple, list)) and len(dpi) >= 2:
+        dx = float(dpi[0])
+        dy = float(dpi[1])
+        if dx > 0 and dy > 0:
+            return (dx, dy)
+    elif isinstance(dpi, (int, float)):
+        d = float(dpi)
+        if d > 0:
+            return (d, d)
+
+    jfif_unit = image_info.get("jfif_unit")
+    jfif_density = image_info.get("jfif_density")
+    if (
+        isinstance(jfif_density, (tuple, list))
+        and len(jfif_density) >= 2
+        and jfif_density[0] > 0
+        and jfif_density[1] > 0
+    ):
+        x = float(jfif_density[0])
+        y = float(jfif_density[1])
+        if jfif_unit == 1:  # dots per inch
+            return (x, y)
+        if jfif_unit == 2:  # dots per cm
+            return (x * 2.54, y * 2.54)
+
+    return None
+
+
+def parse_hex_color(color_text):
+    s = str(color_text).strip()
+    if s.startswith("#"):
+        s = s[1:]
+    if len(s) != 6:
+        raise ValueError(f"Colore non valido: {color_text}")
+    try:
+        r = int(s[0:2], 16)
+        g = int(s[2:4], 16)
+        b = int(s[4:6], 16)
+    except ValueError as exc:
+        raise ValueError(f"Colore non valido: {color_text}") from exc
+    return (r, g, b)
+
+
+def parse_sample_colors(raw_value):
+    if raw_value is None:
+        return []
+    text = str(raw_value).strip()
+    if not text:
+        return []
+    parts = [p.strip() for p in text.replace(";", ",").split(",")]
+    colors = []
+    for part in parts:
+        if not part:
+            continue
+        colors.append(parse_hex_color(part))
+    return colors
+
+
+def build_color_match_mask(rgb_arr, target_colors, tolerance):
+    tol = max(0.0, float(tolerance))
+    tol2 = tol * tol
+    h, w, _ = rgb_arr.shape
+    mask = np.zeros((h, w), dtype=bool)
+    for (tr, tg, tb) in target_colors:
+        dr = rgb_arr[:, :, 0].astype(np.float32) - float(tr)
+        dg = rgb_arr[:, :, 1].astype(np.float32) - float(tg)
+        db = rgb_arr[:, :, 2].astype(np.float32) - float(tb)
+        d2 = dr * dr + dg * dg + db * db
+        mask |= d2 <= tol2
+    return mask
+
+
 def emit_status(message):
     global status_callback
     if status_callback is not None:
@@ -20,20 +98,40 @@ def emit_progress(percent, message=""):
 
 
 def load_points_grouped_from_bytes(
-    data, max_width=None, threshold=200, color_count=2
+    data,
+    max_width=None,
+    threshold=200,
+    color_count=2,
+    sample_colors=None,
+    sample_tolerance=0.0,
 ):
-    img = Image.open(io.BytesIO(data)).convert("RGBA")
+    original = Image.open(io.BytesIO(data))
+    source_dpi = extract_source_dpi(original.info)
+    img = original.convert("RGBA")
+    resize_scale = 1.0
 
     if max_width is not None and max_width > 0:
         w, h = img.size
         if w > max_width:
             scale = max_width / float(w)
+            resize_scale = scale
             new_w = max_width
             new_h = int(h * scale)
             img = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
 
+    effective_dpi = source_dpi
+    if effective_dpi is not None and resize_scale != 1.0:
+        effective_dpi = (
+            float(effective_dpi[0]) * resize_scale,
+            float(effective_dpi[1]) * resize_scale,
+        )
+
+    rgb_arr = np.array(img.convert("RGB"))
     luminance = np.array(img.convert("L"))
     mask = luminance < int(threshold)
+    if sample_colors:
+        # I colori campionati si aggiungono alla selezione base, non la sostituiscono.
+        mask |= build_color_match_mask(rgb_arr, sample_colors, sample_tolerance)
     if "A" in img.getbands():
         alpha = np.array(img.getchannel("A"))
         mask &= alpha > 0
@@ -42,7 +140,7 @@ def load_points_grouped_from_bytes(
         emit_status(
             f"Nessun pixel valido trovato con soglia={threshold}; aumenta la soglia o usa un'immagine diversa."
         )
-        return {}, img.size
+        return {}, img.size, effective_dpi
 
     rgb_img = img.convert("RGB")
     palette_colors = max(1, int(color_count))
@@ -75,7 +173,7 @@ def load_points_grouped_from_bytes(
         "Lettura bitmap completata: "
         f"{img.size[0]}x{img.size[1]} px, colori attivi={len(color_points)}"
     )
-    return color_points, img.size
+    return color_points, img.size, effective_dpi
 
 
 def subsample_points(points, max_points=None):
@@ -395,15 +493,20 @@ def chunk_path(points, chunk_size):
 
 
 def build_svg_for_paths(
-    color_paths, image_size, scale=1.0, stroke_width=0.3, chunk_size=0
+    color_paths,
+    image_size,
+    scale=1.0,
+    stroke_width=0.3,
+    chunk_size=0,
+    source_dpi=None,
 ):
     if not color_paths:
         return ""
     scale = float(scale) if scale else 1.0
     stroke_width = float(stroke_width) if stroke_width else 0.3
     chunk_size = int(chunk_size) if chunk_size else 0
-    width = max(image_size[0] * scale + 10.0, 10.0)
-    height = max(image_size[1] * scale + 10.0, 10.0)
+    width = max(image_size[0] * scale, 1.0)
+    height = max(image_size[1] * scale, 1.0)
     groups = []
     for color_hex, path in color_paths:
         if not path:
@@ -435,10 +538,27 @@ def build_svg_for_paths(
             )
     if not groups:
         return ""
+    width_attr = f"{width:.2f}px"
+    height_attr = f"{height:.2f}px"
+    dpi_x = None
+    dpi_y = None
+    if isinstance(source_dpi, (tuple, list)) and len(source_dpi) >= 2:
+        dpi_x = float(source_dpi[0])
+        dpi_y = float(source_dpi[1])
+    elif isinstance(source_dpi, (int, float)) and source_dpi > 0:
+        dpi_x = float(source_dpi)
+        dpi_y = float(source_dpi)
+    if dpi_x and dpi_y and dpi_x > 0 and dpi_y > 0:
+        mm_per_inch = 25.4
+        width_mm = (width / dpi_x) * mm_per_inch
+        height_mm = (height / dpi_y) * mm_per_inch
+        width_attr = f"{width_mm:.2f}mm"
+        height_attr = f"{height_mm:.2f}mm"
+
     svg = (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         '<svg xmlns="http://www.w3.org/2000/svg"\n'
-        f'     width="{width:.2f}" height="{height:.2f}"\n'
+        f'     width="{width_attr}" height="{height_attr}"\n'
         f'     viewBox="0 0 {width:.2f} {height:.2f}">\n'
         + "\n".join(groups)
         + "\n</svg>\n"
@@ -450,6 +570,7 @@ def process_color_points(
     points,
     opts,
     image_size,
+    effective_dpi,
     color_hex,
     color_idx=0,
     seed_base=None,
@@ -469,8 +590,14 @@ def process_color_points(
         }
 
     analysis_cell_mm = float(opts.get("analysis_cell_mm", 0.0) or 0.0)
+    dpi_for_mm = float(opts.get("default_dpi", 96.0) or 96.0)
+    if isinstance(effective_dpi, (tuple, list)) and len(effective_dpi) >= 2:
+        dpi_for_mm = (float(effective_dpi[0]) + float(effective_dpi[1])) / 2.0
+    elif isinstance(effective_dpi, (int, float)) and effective_dpi > 0:
+        dpi_for_mm = float(effective_dpi)
+
     if analysis_cell_mm >= 1.0 and opts["scale"] > 0:
-        cell_px = analysis_cell_mm / float(opts["scale"])
+        cell_px = analysis_cell_mm * (dpi_for_mm / 25.4) / float(opts["scale"])
         if cell_px > 1.0:
             before = len(working)
             working = regularize_points_on_grid(working, cell_px)
@@ -526,8 +653,11 @@ def process_color_points(
 
     final_path = ordered
     discarded = []
-    if opts["min_dist"] > 0 and opts["scale"] > 0:
-        min_dist_px = opts["min_dist"] / opts["scale"]
+    if opts["min_dist"] > 0:
+        if opts["scale"] > 0:
+            min_dist_px = opts["min_dist"] * (dpi_for_mm / 25.4) / float(opts["scale"])
+        else:
+            min_dist_px = opts["min_dist"] * (dpi_for_mm / 25.4)
         path_filtered, standby = filter_with_min_dist_and_standby(
             ordered, min_dist_px
         )
@@ -569,11 +699,15 @@ def run_pipeline(image_bytes, opts):
 
     max_width = opts["max_width"] if opts["max_width"] > 0 else None
     color_count = max(1, int(opts.get("color_count", 1)))
-    color_points, size = load_points_grouped_from_bytes(
+    sample_colors = parse_sample_colors(opts.get("sample_colors", ""))
+    sample_tolerance = float(opts.get("sample_tolerance", 0.0) or 0.0)
+    color_points, size, source_dpi = load_points_grouped_from_bytes(
         image_bytes,
         max_width=max_width,
         threshold=opts["threshold"],
         color_count=color_count,
+        sample_colors=sample_colors if sample_colors else None,
+        sample_tolerance=sample_tolerance,
     )
     if not color_points:
         raise ValueError(
@@ -582,6 +716,12 @@ def run_pipeline(image_bytes, opts):
     emit_progress(35, "Bitmap analizzata")
 
     emit_status(f"Colori trovati: {len(color_points)} (richiesti {color_count})")
+    if sample_colors:
+        printable = [f"#{r:02X}{g:02X}{b:02X}" for (r, g, b) in sample_colors]
+        emit_status(
+            "Campionamento colori attivo: "
+            f"{', '.join(printable)} con tolleranza {sample_tolerance:.2f}"
+        )
     base_seed = None
     if opts["style"] == "degrade":
         seed_raw = opts.get("degrade_seed")
@@ -624,6 +764,7 @@ def run_pipeline(image_bytes, opts):
             color_points[color_hex],
             opts,
             size,
+            source_dpi,
             color_hex,
             color_idx=idx,
             seed_base=base_seed,
@@ -651,6 +792,7 @@ def run_pipeline(image_bytes, opts):
         scale=opts["scale"],
         stroke_width=opts["stroke_width"],
         chunk_size=opts["chunk_size"],
+        source_dpi=source_dpi,
     )
     emit_progress(93, "SVG combinato creato")
     emit_status(
@@ -669,6 +811,7 @@ def run_pipeline(image_bytes, opts):
                 scale=opts["scale"],
                 stroke_width=opts["stroke_width"],
                 chunk_size=opts["chunk_size"],
+                source_dpi=source_dpi,
             )
 
     color_payload = []
@@ -680,6 +823,7 @@ def run_pipeline(image_bytes, opts):
                 scale=opts["scale"],
                 stroke_width=opts["stroke_width"],
                 chunk_size=opts["chunk_size"],
+                source_dpi=source_dpi,
             )
             if res["path"]
             else ""
