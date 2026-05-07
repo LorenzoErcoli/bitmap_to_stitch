@@ -11,7 +11,10 @@ let monoDownloadUrl = null;
 let multiDownloadUrl = null;
 
 function canUseLocalBackend() {
-  return window.location.protocol === "http:" || window.location.protocol === "https:";
+  return (
+    window.location.protocol === "http:" &&
+    ["127.0.0.1", "localhost"].includes(window.location.hostname)
+  );
 }
 
 function setProgress(value, label = "") {
@@ -255,17 +258,36 @@ function bytesToBase64(bytes) {
 
 async function runWithLocalBackend(imageBytes, options, pushStatus) {
   pushStatus("Uso motore Python locale...");
-  const response = await fetch("/convert", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      image_base64: bytesToBase64(imageBytes),
-      options,
-    }),
-  });
+  let response;
+  try {
+    response = await fetch("/convert", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        image_base64: bytesToBase64(imageBytes),
+        options,
+      }),
+    });
+  } catch (error) {
+    let health = null;
+    try {
+      health = await fetch("/health").then((res) => res.json());
+    } catch (_) {
+      // Il server non risponde: probabilmente il processo locale si e' chiuso.
+    }
+    const logPath = health && health.log_file ? `\nLog: ${health.log_file}` : "";
+    throw new Error(
+      "Il motore locale ha chiuso la connessione durante la conversione. " +
+        "Riavvia BitmapToStitch.exe e riprova con max-width o max-points piu bassi." +
+        logPath
+    );
+  }
   const result = await response.json();
   if (!response.ok) {
-    throw new Error(result.error || "Conversione locale non riuscita.");
+    const logPath = result.log_file ? `\nLog: ${result.log_file}` : "";
+    throw new Error(
+      (result.error || "Conversione locale non riuscita.") + logPath
+    );
   }
   (result.logs || []).forEach((msg) => parseProgressMessage(String(msg), pushStatus));
   return result;

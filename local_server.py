@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
 import base64
+import datetime as _dt
+import faulthandler
 import json
 import mimetypes
+import os
 import sys
+import tempfile
 import threading
+import traceback
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -17,6 +22,47 @@ else:
 WEB_ROOT = ROOT / "web"
 HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
+APP_NAME = "BitmapToStitch"
+
+
+def _app_data_dir():
+    base = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA")
+    if base:
+        return Path(base) / APP_NAME
+    return Path.home() / f".{APP_NAME}"
+
+
+def _select_log_dir():
+    candidates = [_app_data_dir()]
+    if getattr(sys, "frozen", False):
+        candidates.append(Path(sys.executable).resolve().parent)
+    candidates.append(Path(tempfile.gettempdir()) / APP_NAME)
+    for candidate in candidates:
+        try:
+            candidate.mkdir(parents=True, exist_ok=True)
+            probe = candidate / ".write-test"
+            probe.write_text("ok", encoding="utf-8")
+            probe.unlink(missing_ok=True)
+            return candidate
+        except OSError:
+            continue
+    return Path.cwd()
+
+
+LOG_DIR = _select_log_dir()
+LOG_FILE = LOG_DIR / "app.log"
+
+
+def log_event(message):
+    stamp = _dt.datetime.now().isoformat(timespec="seconds")
+    line = f"[{stamp}] {message}"
+    print(line)
+    with LOG_FILE.open("a", encoding="utf-8") as fh:
+        fh.write(line + "\n")
+
+
+_fault_log = LOG_FILE.open("a", encoding="utf-8")
+faulthandler.enable(file=_fault_log, all_threads=True)
 
 
 sys.path.insert(0, str(WEB_ROOT))
@@ -34,14 +80,18 @@ def _json_response(handler, status, payload):
 
 
 class LocalAppHandler(BaseHTTPRequestHandler):
-    server_version = "BitmapToStitchLocal/0.1"
+    server_version = "BitmapToStitchLocal/0.1.1"
 
     def log_message(self, fmt, *args):
-        print("%s - %s" % (self.address_string(), fmt % args))
+        log_event("%s - %s" % (self.address_string(), fmt % args))
 
     def do_GET(self):
         if self.path == "/health":
-            _json_response(self, 200, {"ok": True, "mode": "local"})
+            _json_response(
+                self,
+                200,
+                {"ok": True, "mode": "local", "log_file": str(LOG_FILE)},
+            )
             return
 
         rel_path = unquote(self.path.split("?", 1)[0])
@@ -81,6 +131,13 @@ class LocalAppHandler(BaseHTTPRequestHandler):
             if not image_b64:
                 raise ValueError("Immagine mancante.")
 
+            log_event(
+                "Conversione richiesta: "
+                f"payload_base64_chars={len(image_b64)}, "
+                f"ordering={options.get('ordering')}, "
+                f"max_width={options.get('max_width')}, "
+                f"max_points={options.get('max_points')}"
+            )
             image_bytes = base64.b64decode(image_b64, validate=True)
             logs = []
             pipeline_app.status_callback = lambda msg: logs.append(str(msg))
@@ -90,16 +147,30 @@ class LocalAppHandler(BaseHTTPRequestHandler):
                 pipeline_app.status_callback = None
 
             result["logs"] = logs
+            log_event(
+                "Conversione completata: "
+                f"svg_chars={len(result.get('svg', ''))}, "
+                f"colors={len(result.get('colors', []))}"
+            )
             _json_response(self, 200, result)
-        except Exception as exc:
+        except BaseException as exc:
             pipeline_app.status_callback = None
-            _json_response(self, 400, {"error": str(exc)})
+            log_event("Errore conversione:\n" + traceback.format_exc())
+            _json_response(
+                self,
+                400,
+                {
+                    "error": str(exc),
+                    "log_file": str(LOG_FILE),
+                },
+            )
 
 
 def run(port=DEFAULT_PORT, open_browser=True):
     server = ThreadingHTTPServer((HOST, int(port)), LocalAppHandler)
     url = f"http://{HOST}:{int(port)}/"
-    print(f"Bitmap to Stitch locale avviato: {url}")
+    log_event(f"Bitmap to Stitch locale avviato: {url}")
+    log_event(f"Log file: {LOG_FILE}")
     if open_browser:
         threading.Timer(0.4, lambda: webbrowser.open(url)).start()
     server.serve_forever()
