@@ -1,0 +1,5 @@
+build/
+dist/
+*.spec.bak
+BitmapToStitch-Windows.zip
+web/__pycache__/

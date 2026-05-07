@@ -10,6 +10,10 @@ let colorDownloadUrls = [];
 let monoDownloadUrl = null;
 let multiDownloadUrl = null;
 
+function canUseLocalBackend() {
+  return window.location.protocol === "http:" || window.location.protocol === "https:";
+}
+
 function setProgress(value, label = "") {
   const pct = Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
   if (progressBarEl) {
@@ -178,44 +182,18 @@ async function handleConvert() {
   }
 
   const file = fileInput.files[0];
-  pushStatus("Carico runtime Python...");
-  setProgress(4, "Inizializzo");
-  const pyodide = await initPyodide();
-
   pushStatus("Lettura immagine...");
   setProgress(20, "Lettura immagine");
   const arrayBuffer = await file.arrayBuffer();
   const imageBytes = new Uint8Array(arrayBuffer);
   const options = readOptions();
 
-  const reportStatus = pyodide.toPy((msg) => {
-    const text = String(msg || "");
-    if (text.startsWith("__PROGRESS__|")) {
-      const parts = text.split("|");
-      const pct = parts.length > 1 ? parseFloat(parts[1]) : 0;
-      const label = parts.length > 2 ? parts.slice(2).join("|") : "";
-      setProgress(pct, label);
-      return;
-    }
-    pushStatus(text);
-  });
-  pyodide.globals.set("status_callback", reportStatus);
-
   try {
     pushStatus("Elaborazione in corso...");
     setProgress(25, "Elaborazione");
-    const runPipeline = pyodide.globals.get("run_pipeline_browser");
-    const pyBytes = pyodide.toPy(imageBytes);
-    const pyOptions = pyodide.toPy(options);
-    const resultProxy = runPipeline(pyBytes, pyOptions);
-    const result = resultProxy.toJs({
-      create_proxies: false,
-      dict_converter: Object.fromEntries,
-    });
-    resultProxy.destroy();
-    pyBytes.destroy();
-    pyOptions.destroy();
-    runPipeline.destroy();
+    const result = canUseLocalBackend()
+      ? await runWithLocalBackend(imageBytes, options, pushStatus)
+      : await runWithPyodide(imageBytes, options, pushStatus);
 
     console.log("Result summary:", result.summary);
 
@@ -251,6 +229,71 @@ async function handleConvert() {
     console.error("Errore durante la conversione:", error);
     setProgress(100, "Errore");
     pushStatus(`Errore: ${error.message || error}`);
+  }
+}
+
+function parseProgressMessage(text, pushStatus) {
+  if (text.startsWith("__PROGRESS__|")) {
+    const parts = text.split("|");
+    const pct = parts.length > 1 ? parseFloat(parts[1]) : 0;
+    const label = parts.length > 2 ? parts.slice(2).join("|") : "";
+    setProgress(pct, label);
+    return;
+  }
+  pushStatus(text);
+}
+
+function bytesToBase64(bytes) {
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize);
+    binary += String.fromCharCode.apply(null, chunk);
+  }
+  return btoa(binary);
+}
+
+async function runWithLocalBackend(imageBytes, options, pushStatus) {
+  pushStatus("Uso motore Python locale...");
+  const response = await fetch("/convert", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      image_base64: bytesToBase64(imageBytes),
+      options,
+    }),
+  });
+  const result = await response.json();
+  if (!response.ok) {
+    throw new Error(result.error || "Conversione locale non riuscita.");
+  }
+  (result.logs || []).forEach((msg) => parseProgressMessage(String(msg), pushStatus));
+  return result;
+}
+
+async function runWithPyodide(imageBytes, options, pushStatus) {
+  pushStatus("Carico runtime Python...");
+  setProgress(4, "Inizializzo");
+  const pyodide = await initPyodide();
+  const reportStatus = pyodide.toPy((msg) => {
+    parseProgressMessage(String(msg || ""), pushStatus);
+  });
+  pyodide.globals.set("status_callback", reportStatus);
+
+  try {
+    const runPipeline = pyodide.globals.get("run_pipeline_browser");
+    const pyBytes = pyodide.toPy(imageBytes);
+    const pyOptions = pyodide.toPy(options);
+    const resultProxy = runPipeline(pyBytes, pyOptions);
+    const result = resultProxy.toJs({
+      create_proxies: false,
+      dict_converter: Object.fromEntries,
+    });
+    resultProxy.destroy();
+    pyBytes.destroy();
+    pyOptions.destroy();
+    runPipeline.destroy();
+    return result;
   } finally {
     pyodide.runPython("status_callback = None");
     reportStatus.destroy();
