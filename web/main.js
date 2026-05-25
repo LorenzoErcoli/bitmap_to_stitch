@@ -5,6 +5,15 @@ const colorDownloadsEl = document.getElementById("color-downloads");
 const progressBarEl = document.getElementById("progress-bar");
 const progressTextEl = document.getElementById("progress-text");
 const convertBtn = document.getElementById("convert");
+const previewBtn = document.getElementById("preview");
+const previewPanelEl = document.getElementById("preview-panel");
+const previewImageEl = document.getElementById("preview-image");
+const previewMaskEl = document.getElementById("preview-mask");
+const previewStatsEl = document.getElementById("preview-stats");
+const previewColorsEl = document.getElementById("preview-colors");
+const lightboxEl = document.getElementById("image-lightbox");
+const lightboxImageEl = document.getElementById("lightbox-image");
+const closeLightboxBtn = document.getElementById("close-lightbox");
 let pyodideReady = null;
 let colorDownloadUrls = [];
 let monoDownloadUrl = null;
@@ -63,6 +72,9 @@ function readOptions() {
     threshold: num("threshold", 200, parseInt),
     sample_colors: val("sample-colors"),
     sample_tolerance: num("sample-tolerance", 0.0),
+    exclude_background: document.getElementById("exclude-background").checked,
+    background_colors: val("background-colors"),
+    background_tolerance: num("background-tolerance", 0.0),
     default_dpi: num("default-dpi", 96.0),
     max_points: num("max-points", 0, parseInt),
     target_density: num("target-density", 0.0),
@@ -165,6 +177,126 @@ function renderColorDownloads(colors, baseName) {
 
   colorDownloadsEl.appendChild(fragment);
   colorDownloadsEl.style.display = "flex";
+}
+
+function imageDataUrl(base64) {
+  return `data:image/png;base64,${base64}`;
+}
+
+function renderPreview(result) {
+  if (!previewPanelEl || !result) {
+    return;
+  }
+
+  previewPanelEl.style.display = "block";
+  if (previewImageEl && result.overlay_png_base64) {
+    previewImageEl.src = imageDataUrl(result.overlay_png_base64);
+  }
+  if (previewMaskEl && result.mask_png_base64) {
+    previewMaskEl.src = imageDataUrl(result.mask_png_base64);
+  }
+  if (previewStatsEl) {
+    previewStatsEl.textContent =
+      `${result.width}x${result.height}px - ` +
+      `${result.selected_pixels} pixel selezionati ` +
+      `(${Number(result.selected_pct || 0).toFixed(1)}%)`;
+  }
+  if (!previewColorsEl) {
+    return;
+  }
+
+  previewColorsEl.innerHTML = "";
+  const fragment = document.createDocumentFragment();
+  (result.colors || []).forEach((info) => {
+    const card = document.createElement("div");
+    card.className = "preview-color-card";
+
+    const mask = document.createElement("img");
+    mask.className = "preview-color-mask";
+    mask.alt = `Maschera ${info.color}`;
+    mask.src = imageDataUrl(info.mask_png_base64);
+    card.appendChild(mask);
+
+    const meta = document.createElement("div");
+    meta.className = "preview-color-meta";
+
+    const line = document.createElement("div");
+    line.className = "preview-color-line";
+    const swatch = document.createElement("span");
+    swatch.className = "color-swatch";
+    swatch.style.backgroundColor = info.color || "#000000";
+    line.appendChild(swatch);
+    const colorText = document.createElement("strong");
+    colorText.textContent = info.color || "#000000";
+    line.appendChild(colorText);
+    meta.appendChild(line);
+
+    const details = document.createElement("span");
+    details.textContent =
+      `${info.pixel_count} px - ${Number(info.area_pct || 0).toFixed(2)}%`;
+    meta.appendChild(details);
+    card.appendChild(meta);
+    fragment.appendChild(card);
+  });
+  previewColorsEl.appendChild(fragment);
+}
+
+function openLightbox(src, alt = "Preview ingrandita") {
+  if (!lightboxEl || !lightboxImageEl || !src) {
+    return;
+  }
+  lightboxImageEl.src = src;
+  lightboxImageEl.alt = alt;
+  lightboxEl.classList.add("open");
+  lightboxEl.setAttribute("aria-hidden", "false");
+}
+
+function closeLightbox() {
+  if (!lightboxEl || !lightboxImageEl) {
+    return;
+  }
+  lightboxEl.classList.remove("open");
+  lightboxEl.setAttribute("aria-hidden", "true");
+  lightboxImageEl.removeAttribute("src");
+}
+
+async function handlePreview() {
+  console.log("Analizza preview premuto");
+  const statusHistory = [];
+  const pushStatus = (msg) => {
+    statusHistory.push(msg);
+    statusEl.innerText = statusHistory.join("\n");
+  };
+  setProgress(0, "In attesa");
+
+  const fileInput = document.getElementById("image");
+  if (fileInput.files.length === 0) {
+    pushStatus("Seleziona un'immagine prima di procedere.");
+    return;
+  }
+
+  const file = fileInput.files[0];
+  pushStatus("Analisi immagine...");
+  setProgress(15, "Analisi preview");
+  const arrayBuffer = await file.arrayBuffer();
+  const imageBytes = new Uint8Array(arrayBuffer);
+  const options = readOptions();
+
+  try {
+    const result = canUseLocalBackend()
+      ? await runPreviewWithLocalBackend(imageBytes, options, pushStatus)
+      : await runPreviewWithPyodide(imageBytes, options, pushStatus);
+    renderPreview(result);
+    setProgress(100, "Preview pronta");
+    pushStatus(
+      `Preview pronta: ${result.selected_pixels} pixel, ` +
+        `${(result.colors || []).length} colori.`
+    );
+  } catch (error) {
+    console.error("Errore durante la preview:", error);
+    setProgress(100, "Errore");
+    pushStatus(`Errore preview: ${error.message || error}`);
+  }
 }
 
 async function handleConvert() {
@@ -293,6 +425,34 @@ async function runWithLocalBackend(imageBytes, options, pushStatus) {
   return result;
 }
 
+async function runPreviewWithLocalBackend(imageBytes, options, pushStatus) {
+  pushStatus("Uso motore Python locale per la preview...");
+  let response;
+  try {
+    response = await fetch("/preview", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        image_base64: bytesToBase64(imageBytes),
+        options,
+      }),
+    });
+  } catch (error) {
+    throw new Error(
+      "Preview locale non riuscita. Riavvia BitmapToStitch e riprova."
+    );
+  }
+  const result = await response.json();
+  if (!response.ok) {
+    const logPath = result.log_file ? `\nLog: ${result.log_file}` : "";
+    throw new Error((result.error || "Preview locale non riuscita.") + logPath);
+  }
+  (result.logs || []).forEach((msg) =>
+    parseProgressMessage(String(msg), pushStatus)
+  );
+  return result;
+}
+
 async function runWithPyodide(imageBytes, options, pushStatus) {
   pushStatus("Carico runtime Python...");
   setProgress(4, "Inizializzo");
@@ -321,6 +481,59 @@ async function runWithPyodide(imageBytes, options, pushStatus) {
     reportStatus.destroy();
   }
 }
+
+async function runPreviewWithPyodide(imageBytes, options, pushStatus) {
+  pushStatus("Carico runtime Python...");
+  setProgress(4, "Inizializzo");
+  const pyodide = await initPyodide();
+  const runPreview = pyodide.globals.get("analyze_preview_browser");
+  const pyBytes = pyodide.toPy(imageBytes);
+  const pyOptions = pyodide.toPy(options);
+  try {
+    const resultProxy = runPreview(pyBytes, pyOptions);
+    const result = resultProxy.toJs({
+      create_proxies: false,
+      dict_converter: Object.fromEntries,
+    });
+    resultProxy.destroy();
+    return result;
+  } finally {
+    pyBytes.destroy();
+    pyOptions.destroy();
+    runPreview.destroy();
+  }
+}
+
+previewBtn.addEventListener("click", () => {
+  handlePreview();
+});
+
+if (previewPanelEl) {
+  previewPanelEl.addEventListener("click", (event) => {
+    const target = event.target;
+    if (target instanceof HTMLImageElement && target.src) {
+      openLightbox(target.src, target.alt || "Preview ingrandita");
+    }
+  });
+}
+
+if (closeLightboxBtn) {
+  closeLightboxBtn.addEventListener("click", closeLightbox);
+}
+
+if (lightboxEl) {
+  lightboxEl.addEventListener("click", (event) => {
+    if (event.target === lightboxEl) {
+      closeLightbox();
+    }
+  });
+}
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && lightboxEl?.classList.contains("open")) {
+    closeLightbox();
+  }
+});
 
 convertBtn.addEventListener("click", () => {
   handleConvert();

@@ -11,91 +11,143 @@
     <style>
       :root {
         font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
-        background: #f4f4f6;
+        color: #172033;
+        background: #eef2f7;
+        --panel: #ffffff;
+        --panel-soft: #f8fafc;
+        --line: #d8e0ea;
+        --line-strong: #bfccdb;
+        --text-muted: #5d6b7f;
+        --accent: #1264d8;
+        --accent-dark: #0d4fae;
+        --accent-soft: #e8f1ff;
       }
       body {
         margin: 0;
+        background:
+          linear-gradient(180deg, #f8fafc 0, #eef2f7 260px),
+          #eef2f7;
       }
       main {
-        max-width: 960px;
+        max-width: 1180px;
         margin: 0 auto;
-        padding: 2rem;
+        padding: 1.25rem;
       }
       h1 {
-        margin-bottom: 0.5rem;
+        margin: 0 0 0.35rem;
         font-weight: 600;
+        font-size: 1.8rem;
+        line-height: 1.12;
       }
       p.lead {
         margin-top: 0;
-        color: #555;
+        color: var(--text-muted);
       }
       fieldset {
-        border: 1px solid #ccc;
+        border: 1px solid var(--line);
         border-radius: 0.5rem;
-        margin-bottom: 1.5rem;
-        padding: 1rem 1.25rem 1.5rem;
-        background: #fff;
+        margin-bottom: 1rem;
+        padding: 0.9rem 1rem 1rem;
+        background: var(--panel);
+        box-shadow: 0 1px 2px rgba(17, 31, 51, 0.04);
       }
       legend {
         padding: 0 0.5rem;
         font-weight: 600;
+        color: #253247;
       }
       .controls {
         display: grid;
-        gap: 0.75rem 1rem;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 0.65rem 0.85rem;
+        grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
         margin-top: 0.75rem;
       }
       .control {
         display: flex;
         flex-direction: column;
-        font-size: 0.9rem;
+        min-width: 0;
+        font-size: 0.86rem;
       }
       .control label {
         font-weight: 600;
-        margin-bottom: 0.15rem;
+        margin-bottom: 0.22rem;
         display: inline-flex;
         align-items: center;
         gap: 0.35rem;
+        color: #2a374b;
       }
       .control input,
       .control select {
-        padding: 0.35rem 0.45rem;
+        min-height: 2.25rem;
+        padding: 0.35rem 0.5rem;
         border-radius: 0.35rem;
-        border: 1px solid #bbb;
-        font-size: 0.95rem;
+        border: 1px solid var(--line-strong);
+        background: #fff;
+        color: #172033;
+        font-size: 0.92rem;
+        box-sizing: border-box;
+      }
+      .control input:focus,
+      .control select:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-soft);
+        outline: none;
+      }
+      .control input[type="checkbox"] {
+        min-height: 0;
+        width: 1rem;
+        height: 1rem;
+        accent-color: var(--accent);
       }
       .actions {
+        position: sticky;
+        bottom: 0;
+        z-index: 10;
         display: flex;
         align-items: center;
         flex-wrap: wrap;
-        gap: 1rem;
-        margin: 1.25rem 0;
+        gap: 0.65rem;
+        margin: 1rem 0;
+        padding: 0.75rem;
+        background: rgba(248, 250, 252, 0.94);
+        border: 1px solid var(--line);
+        border-radius: 0.5rem;
+        box-shadow: 0 8px 24px rgba(17, 31, 51, 0.08);
+        backdrop-filter: blur(8px);
       }
       button {
-        background: #006dff;
+        min-height: 2.35rem;
+        background: var(--accent);
         color: #fff;
         border: none;
-        border-radius: 0.4rem;
-        padding: 0.6rem 1.5rem;
-        font-size: 1rem;
+        border-radius: 0.35rem;
+        padding: 0.55rem 1rem;
+        font-size: 0.94rem;
+        font-weight: 650;
         cursor: pointer;
       }
       button:hover {
-        background: #0053c7;
+        background: var(--accent-dark);
       }
       .btn-secondary {
-        background: #f2f5fb;
+        background: #fff;
         color: #173a6b;
-        border: 1px solid #bdd0ef;
+        border: 1px solid #b8c8de;
       }
       .btn-secondary:hover {
-        background: #e5eefb;
+        background: var(--accent-soft);
+      }
+      #convert {
+        padding-inline: 1.25rem;
+      }
+      #preview {
+        color: var(--accent-dark);
       }
       .local-download {
-        color: #173a6b;
+        color: #29496f;
         font-weight: 700;
         text-decoration: none;
+        margin-left: auto;
       }
       .local-download:hover {
         text-decoration: underline;
@@ -104,7 +156,7 @@
       #download-multi {
         display: none;
         font-weight: 600;
-        color: #0053c7;
+        color: var(--accent);
         text-decoration: none;
       }
       #download-link:hover,
@@ -115,7 +167,7 @@
         display: none;
         flex-direction: column;
         gap: 0.5rem;
-        margin: 0.75rem 0 1.5rem;
+        margin: 0.75rem 0 1rem;
       }
       .color-downloads-title {
         margin: 0;
@@ -126,8 +178,8 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
-        background: #fff;
-        border: 1px solid #ddd;
+        background: var(--panel);
+        border: 1px solid var(--line);
         border-radius: 0.5rem;
         padding: 0.45rem 0.75rem;
       }
@@ -151,11 +203,103 @@
       .color-download-link:hover {
         text-decoration: underline;
       }
-      #status {
-        padding: 0.75rem;
-        background: #fff;
+      .preview-panel {
+        display: none;
+        margin: 1rem 0;
+        padding: 1rem;
+        background: var(--panel);
+        border: 1px solid var(--line);
         border-radius: 0.5rem;
-        border: 1px solid #ddd;
+        box-shadow: 0 1px 2px rgba(17, 31, 51, 0.04);
+      }
+      .preview-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(220px, 320px);
+        gap: 1rem;
+        align-items: start;
+      }
+      .preview-images {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 0.75rem;
+      }
+      .preview-frame {
+        background: var(--panel-soft);
+        border: 1px solid var(--line);
+        border-radius: 0.5rem;
+        padding: 0.6rem;
+      }
+      .preview-frame h3,
+      .preview-colors h3 {
+        margin: 0 0 0.5rem;
+        font-size: 0.95rem;
+        color: #253247;
+      }
+      .preview-frame img {
+        display: block;
+        width: 100%;
+        max-height: 420px;
+        object-fit: contain;
+        background: #f7f8fb;
+        border: 1px solid #edf0f5;
+        cursor: zoom-in;
+      }
+      .preview-stats {
+        margin: 0 0 0.65rem;
+        color: var(--text-muted);
+        font-size: 0.9rem;
+      }
+      .preview-colors {
+        background: var(--panel-soft);
+        border: 1px solid var(--line);
+        border-radius: 0.5rem;
+        padding: 0.65rem;
+      }
+      .preview-color-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+      .preview-color-card {
+        display: grid;
+        grid-template-columns: 52px minmax(0, 1fr);
+        gap: 0.55rem;
+        align-items: center;
+        border: 1px solid #e4e8ef;
+        border-radius: 0.4rem;
+        padding: 0.4rem;
+      }
+      .preview-color-mask {
+        width: 52px;
+        height: 52px;
+        object-fit: contain;
+        background: #f7f8fb;
+        border: 1px solid #edf0f5;
+        cursor: zoom-in;
+      }
+      .preview-color-meta {
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+        gap: 0.15rem;
+        font-size: 0.82rem;
+        color: #4a5668;
+      }
+      .preview-color-line {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 0.45rem;
+        color: #1f2c3d;
+      }
+      #status {
+        min-height: 4rem;
+        padding: 0.75rem;
+        background: var(--panel);
+        border-radius: 0.5rem;
+        border: 1px solid var(--line);
+        color: #26364d;
+        white-space: pre-wrap;
       }
       .progress-wrap {
         margin: 0.5rem 0 1rem;
@@ -163,15 +307,15 @@
       .progress-track {
         width: 100%;
         height: 10px;
-        background: #e7edf6;
-        border: 1px solid #cbd6e6;
+        background: #e6edf6;
+        border: 1px solid #c8d4e3;
         border-radius: 999px;
         overflow: hidden;
       }
       .progress-bar {
         height: 100%;
         width: 0%;
-        background: linear-gradient(90deg, #1e6dff, #2db4ff);
+        background: var(--accent);
         transition: width 0.18s ease;
       }
       #progress-text {
@@ -191,6 +335,35 @@
       }
       .modal-backdrop.open {
         display: flex;
+      }
+      .image-lightbox {
+        position: fixed;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 1.2rem;
+        background: rgba(8, 17, 31, 0.78);
+        z-index: 60;
+      }
+      .image-lightbox.open {
+        display: flex;
+      }
+      .image-lightbox img {
+        max-width: min(96vw, 1400px);
+        max-height: 92vh;
+        object-fit: contain;
+        background: #fff;
+        border: 1px solid #dce2ec;
+        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+      }
+      .image-lightbox button {
+        position: absolute;
+        top: 1rem;
+        right: 1rem;
+        background: #fff;
+        color: #1d2a3d;
+        border: 1px solid #ccd6e6;
       }
       .modal {
         width: min(980px, 100%);
@@ -231,8 +404,8 @@
         grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
       }
       .help-card {
-        background: #f8fbff;
-        border: 1px solid #dbe7fa;
+        background: var(--panel-soft);
+        border: 1px solid var(--line);
         border-radius: 0.5rem;
         padding: 0.65rem 0.75rem;
       }
@@ -286,9 +459,32 @@
         transition: opacity 0.12s ease;
         z-index: 20;
       }
-      .info-tip:hover::after,
-      .info-tip:focus::after {
-        opacity: 1;
+        .info-tip:hover::after,
+        .info-tip:focus::after {
+          opacity: 1;
+        }
+      @media (max-width: 760px) {
+        main {
+          padding: 0.8rem;
+        }
+        h1 {
+          font-size: 1.45rem;
+        }
+        .actions {
+          align-items: stretch;
+        }
+        .actions button,
+        .actions a {
+          width: 100%;
+          text-align: center;
+          box-sizing: border-box;
+        }
+        .local-download {
+          margin-left: 0;
+        }
+        .preview-layout {
+          grid-template-columns: 1fr;
+        }
       }
     </style>
   </head>
@@ -331,6 +527,20 @@
             <input type="number" id="sample-tolerance" min="0" step="1" value="24" />
           </div>
           <div class="control">
+            <label for="exclude-background">
+              <input type="checkbox" id="exclude-background" checked />
+              Escludi sfondo <span class="info-tip" tabindex="0" data-tip="Se attivo, i colori indicati come sfondo vengono rimossi dalla selezione. Disattivalo se vuoi ricamare il bianco.">i</span>
+            </label>
+          </div>
+          <div class="control">
+            <label for="background-colors">Background colors <span class="info-tip" tabindex="0" data-tip="Colori da ignorare come sfondo (es. #FFFFFF o #F8F8F8,#FFFFFF).">i</span></label>
+            <input type="text" id="background-colors" value="#FFFFFF" placeholder="#FFFFFF" />
+          </div>
+          <div class="control">
+            <label for="background-tolerance">Background tolerance <span class="info-tip" tabindex="0" data-tip="Tolleranza RGB per escludere sfondi quasi bianchi o leggermente colorati.">i</span></label>
+            <input type="number" id="background-tolerance" min="0" step="1" value="30" />
+          </div>
+          <div class="control">
             <label for="color-count">Numero colori <span class="info-tip" tabindex="0" data-tip="Numero cluster colore usati in quantizzazione (1-12).">i</span></label>
             <input type="number" id="color-count" min="1" max="12" value="2" />
           </div>
@@ -346,7 +556,7 @@
                 min="0"
                 max="100"
                 step="0.1"
-                value="0"
+                value="4"
               />
             </div>
             <div class="control">
@@ -444,6 +654,9 @@
       </fieldset>
 
       <div class="actions">
+        <button id="preview" class="btn-secondary" type="button">
+          Analizza preview
+        </button>
         <button id="convert">Genera SVG</button>
         <button id="open-help" class="btn-secondary" type="button">
           Guida parametri
@@ -462,6 +675,26 @@
       </div>
 
       <div id="color-downloads" class="color-downloads"></div>
+
+      <section id="preview-panel" class="preview-panel" aria-live="polite">
+        <p id="preview-stats" class="preview-stats"></p>
+        <div class="preview-layout">
+          <div class="preview-images">
+            <div class="preview-frame">
+              <h3>Overlay aree selezionate</h3>
+              <img id="preview-image" alt="Preview overlay aree selezionate" />
+            </div>
+            <div class="preview-frame">
+              <h3>Maschera colori</h3>
+              <img id="preview-mask" alt="Preview maschera colori" />
+            </div>
+          </div>
+          <aside class="preview-colors">
+            <h3>Colori scelti</h3>
+            <div id="preview-colors" class="preview-color-list"></div>
+          </aside>
+        </div>
+      </section>
 
       <div class="progress-wrap">
         <div class="progress-track">
@@ -509,6 +742,18 @@
             <article class="help-card">
               <h3>Sample tolerance</h3>
               <p>Tolleranza RGB per il campionamento colore (0 = match esatto).</p>
+            </article>
+            <article class="help-card">
+              <h3>Escludi sfondo</h3>
+              <p>Rimuove dalla selezione i colori indicati come sfondo. Disattivalo se il bianco e' un filo da ricamare.</p>
+            </article>
+            <article class="help-card">
+              <h3>Background colors</h3>
+              <p>Lista colori da ignorare come sfondo, ad esempio #FFFFFF.</p>
+            </article>
+            <article class="help-card">
+              <h3>Background tolerance</h3>
+              <p>Tolleranza RGB per eliminare sfondi quasi bianchi o leggermente colorati.</p>
             </article>
             <article class="help-card">
               <h3>Numero colori</h3>
@@ -585,6 +830,10 @@
           </div>
         </div>
       </div>
+    </div>
+    <div id="image-lightbox" class="image-lightbox" aria-hidden="true">
+      <button id="close-lightbox" type="button">Chiudi</button>
+      <img id="lightbox-image" alt="Preview ingrandita" />
     </div>
 
     <script>

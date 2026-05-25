@@ -118,7 +118,7 @@ class LocalAppHandler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_POST(self):
-        if self.path != "/convert":
+        if self.path not in ("/convert", "/preview"):
             self.send_error(404)
             return
 
@@ -131,8 +131,10 @@ class LocalAppHandler(BaseHTTPRequestHandler):
             if not image_b64:
                 raise ValueError("Immagine mancante.")
 
+            is_preview = self.path == "/preview"
             log_event(
-                "Conversione richiesta: "
+                ("Preview richiesta: " if is_preview else "Conversione richiesta: ")
+                +
                 f"payload_base64_chars={len(image_b64)}, "
                 f"ordering={options.get('ordering')}, "
                 f"max_width={options.get('max_width')}, "
@@ -142,16 +144,26 @@ class LocalAppHandler(BaseHTTPRequestHandler):
             logs = []
             pipeline_app.status_callback = lambda msg: logs.append(str(msg))
             try:
-                result = pipeline_app.run_pipeline_browser(image_bytes, options)
+                if is_preview:
+                    result = pipeline_app.analyze_preview_browser(image_bytes, options)
+                else:
+                    result = pipeline_app.run_pipeline_browser(image_bytes, options)
             finally:
                 pipeline_app.status_callback = None
 
             result["logs"] = logs
-            log_event(
-                "Conversione completata: "
-                f"svg_chars={len(result.get('svg', ''))}, "
-                f"colors={len(result.get('colors', []))}"
-            )
+            if is_preview:
+                log_event(
+                    "Preview completata: "
+                    f"selected_pixels={result.get('selected_pixels')}, "
+                    f"colors={len(result.get('colors', []))}"
+                )
+            else:
+                log_event(
+                    "Conversione completata: "
+                    f"svg_chars={len(result.get('svg', ''))}, "
+                    f"colors={len(result.get('colors', []))}"
+                )
             _json_response(self, 200, result)
         except BaseException as exc:
             pipeline_app.status_callback = None

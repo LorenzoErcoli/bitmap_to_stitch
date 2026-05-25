@@ -1,3 +1,4 @@
+import base64
 import io
 import math
 
@@ -86,6 +87,220 @@ def build_color_match_mask(rgb_arr, target_colors, tolerance):
     return mask
 
 
+def build_palette_from_selected_pixels(
+    rgb_arr, mask, color_count, max_palette_sample=200000
+):
+    selected_rgb = rgb_arr[mask].astype(np.uint8)
+    if selected_rgb.size == 0:
+        return np.zeros((0, 3), dtype=np.float32)
+
+    palette_size = max(1, int(color_count))
+    sample = selected_rgb
+    if len(sample) > max_palette_sample:
+        idx = np.linspace(0, len(sample) - 1, num=max_palette_sample, dtype=int)
+        sample = sample[idx]
+
+    sample_img = Image.fromarray(sample.reshape((len(sample), 1, 3)), mode="RGB")
+    quantized = sample_img.convert(
+        "P", palette=Image.ADAPTIVE, colors=palette_size
+    )
+    raw_palette = quantized.getpalette() or []
+
+    palette = []
+    seen = set()
+    for idx in range(palette_size):
+        base = idx * 3
+        if base + 2 >= len(raw_palette):
+            break
+        color = (
+            int(raw_palette[base]),
+            int(raw_palette[base + 1]),
+            int(raw_palette[base + 2]),
+        )
+        if color in seen:
+            continue
+        seen.add(color)
+        palette.append(color)
+
+    if not palette:
+        mean_color = selected_rgb.mean(axis=0).round().astype(int)
+        palette.append(tuple(int(v) for v in mean_color))
+
+    return np.asarray(palette, dtype=np.float32)
+
+
+def group_mask_points_by_palette(rgb_arr, mask, color_count):
+    palette = build_palette_from_selected_pixels(rgb_arr, mask, color_count)
+    return group_mask_points_with_palette(rgb_arr, mask, palette)
+
+
+def group_mask_points_with_palette(rgb_arr, mask, palette):
+    ys, xs = np.where(mask)
+    if len(palette) == 0:
+        return {}
+
+    selected_rgb = rgb_arr[ys, xs].astype(np.float32)
+    if len(palette) == 1:
+        labels = np.zeros(len(selected_rgb), dtype=np.int32)
+    else:
+        diff = selected_rgb[:, None, :] - palette[None, :, :]
+        distances = np.sum(diff * diff, axis=2)
+        labels = np.argmin(distances, axis=1)
+
+    color_points = {}
+    for palette_idx, color in enumerate(palette.astype(np.uint8)):
+        selected = labels == palette_idx
+        if not np.any(selected):
+            continue
+        color_hex = f"#{color[0]:02X}{color[1]:02X}{color[2]:02X}"
+        px = xs[selected]
+        py = ys[selected]
+        color_points[color_hex] = list(zip(px.tolist(), py.tolist()))
+
+    return color_points
+
+
+def label_mask_pixels_with_palette(rgb_arr, mask, palette):
+    ys, xs = np.where(mask)
+    if len(palette) == 0 or len(xs) == 0:
+        return ys, xs, np.zeros(0, dtype=np.int32)
+
+    selected_rgb = rgb_arr[ys, xs].astype(np.float32)
+    if len(palette) == 1:
+        labels = np.zeros(len(selected_rgb), dtype=np.int32)
+    else:
+        labels = np.empty(len(selected_rgb), dtype=np.int32)
+        chunk_size = 250000
+        for start in range(0, len(selected_rgb), chunk_size):
+            end = min(start + chunk_size, len(selected_rgb))
+            chunk = selected_rgb[start:end]
+            diff = chunk[:, None, :] - palette[None, :, :]
+            distances = np.sum(diff * diff, axis=2)
+            labels[start:end] = np.argmin(distances, axis=1)
+    return ys, xs, labels
+
+
+def png_base64_from_array(arr):
+    buffer = io.BytesIO()
+    Image.fromarray(arr.astype(np.uint8)).save(buffer, format="PNG")
+    return base64.b64encode(buffer.getvalue()).decode("ascii")
+
+
+def build_preview_images(rgb_arr, mask, palette):
+    h, w, _ = rgb_arr.shape
+    ys, xs, labels = label_mask_pixels_with_palette(rgb_arr, mask, palette)
+
+    overlay = rgb_arr.astype(np.float32)
+    color_layer = overlay.copy()
+    mask_preview = np.full((h, w, 3), 245, dtype=np.uint8)
+    color_masks = []
+    counts = []
+
+    for palette_idx, color in enumerate(palette.astype(np.uint8)):
+        selected = labels == palette_idx
+        count = int(np.count_nonzero(selected))
+        counts.append(count)
+        if count == 0:
+            color_masks.append("")
+            continue
+
+        px = xs[selected]
+        py = ys[selected]
+        color_layer[py, px] = color
+        mask_preview[py, px] = color
+
+        single = np.full((h, w, 4), 0, dtype=np.uint8)
+        single[py, px, :3] = color
+        single[py, px, 3] = 255
+        color_masks.append(png_base64_from_array(single))
+
+    selected_mask = mask[:, :, None]
+    overlay[selected_mask.repeat(3, axis=2)] = (
+        overlay[selected_mask.repeat(3, axis=2)] * 0.35
+        + color_layer[selected_mask.repeat(3, axis=2)] * 0.65
+    )
+
+    return {
+        "overlay_png_base64": png_base64_from_array(overlay),
+        "mask_png_base64": png_base64_from_array(mask_preview),
+        "color_mask_pngs": color_masks,
+        "counts": counts,
+    }
+
+
+def analyze_preview(image_bytes, opts):
+    if not isinstance(image_bytes, (bytes, bytearray)):
+        image_bytes = bytes(image_bytes)
+
+    max_width = opts["max_width"] if opts["max_width"] > 0 else None
+    color_count = max(1, int(opts.get("color_count", 1)))
+    sample_colors = parse_sample_colors(opts.get("sample_colors", ""))
+    sample_tolerance = float(opts.get("sample_tolerance", 0.0) or 0.0)
+    exclude_background = bool(opts.get("exclude_background", False))
+    background_colors = parse_sample_colors(opts.get("background_colors", ""))
+    background_tolerance = float(opts.get("background_tolerance", 0.0) or 0.0)
+
+    original = Image.open(io.BytesIO(image_bytes))
+    img = original.convert("RGBA")
+    if max_width is not None and max_width > 0:
+        w, h = img.size
+        if w > max_width:
+            scale = max_width / float(w)
+            img = img.resize((max_width, int(h * scale)), Image.Resampling.LANCZOS)
+
+    rgb_arr = np.array(img.convert("RGB"))
+    luminance = np.array(img.convert("L"))
+    mask = luminance < int(opts["threshold"])
+    if sample_colors:
+        mask |= build_color_match_mask(rgb_arr, sample_colors, sample_tolerance)
+    if exclude_background and background_colors:
+        mask &= ~build_color_match_mask(
+            rgb_arr, background_colors, background_tolerance
+        )
+    if "A" in img.getbands():
+        alpha = np.array(img.getchannel("A"))
+        mask &= alpha > 0
+
+    total_pixels = int(mask.size)
+    selected_pixels = int(np.count_nonzero(mask))
+    if selected_pixels == 0:
+        raise ValueError(
+            "Nessun pixel utile trovato per la preview. Modifica soglia, colori o sfondo escluso."
+        )
+
+    palette = build_palette_from_selected_pixels(rgb_arr, mask, color_count)
+    preview = build_preview_images(rgb_arr, mask, palette)
+    counts = preview.pop("counts")
+
+    colors = []
+    for idx, color in enumerate(palette.astype(np.uint8)):
+        count = counts[idx] if idx < len(counts) else 0
+        if count <= 0:
+            continue
+        colors.append(
+            {
+                "color": f"#{color[0]:02X}{color[1]:02X}{color[2]:02X}",
+                "pixel_count": count,
+                "area_pct": (100.0 * count / total_pixels) if total_pixels else 0.0,
+                "mask_png_base64": preview["color_mask_pngs"][idx],
+            }
+        )
+
+    preview.pop("color_mask_pngs", None)
+    preview.update(
+        {
+            "width": int(img.size[0]),
+            "height": int(img.size[1]),
+            "selected_pixels": selected_pixels,
+            "selected_pct": (100.0 * selected_pixels / total_pixels)
+            if total_pixels
+            else 0.0,
+            "colors": colors,
+        }
+    )
+    return preview
+
+
 def emit_status(message):
     global status_callback
     if status_callback is not None:
@@ -104,6 +319,9 @@ def load_points_grouped_from_bytes(
     color_count=2,
     sample_colors=None,
     sample_tolerance=0.0,
+    exclude_background=False,
+    background_colors=None,
+    background_tolerance=0.0,
 ):
     original = Image.open(io.BytesIO(data))
     source_dpi = extract_source_dpi(original.info)
@@ -132,6 +350,10 @@ def load_points_grouped_from_bytes(
     if sample_colors:
         # I colori campionati si aggiungono alla selezione base, non la sostituiscono.
         mask |= build_color_match_mask(rgb_arr, sample_colors, sample_tolerance)
+    if exclude_background and background_colors:
+        mask &= ~build_color_match_mask(
+            rgb_arr, background_colors, background_tolerance
+        )
     if "A" in img.getbands():
         alpha = np.array(img.getchannel("A"))
         mask &= alpha > 0
@@ -142,32 +364,8 @@ def load_points_grouped_from_bytes(
         )
         return {}, img.size, effective_dpi
 
-    rgb_img = img.convert("RGB")
     palette_colors = max(1, int(color_count))
-    quantized = rgb_img.convert(
-        "P", palette=Image.ADAPTIVE, colors=palette_colors
-    )
-    palette = quantized.getpalette()
-    arr = np.array(quantized)
-
-    ys, xs = np.where(mask)
-    indexes = arr[ys, xs]
-    unique_idxs = np.unique(indexes)
-
-    def idx_to_hex(idx):
-        base = idx * 3
-        r = palette[base]
-        g = palette[base + 1]
-        b = palette[base + 2]
-        return f"#{r:02X}{g:02X}{b:02X}"
-
-    color_points = {}
-    for idx in unique_idxs.tolist():
-        color_hex = idx_to_hex(int(idx))
-        color_mask = indexes == idx
-        px = xs[color_mask]
-        py = ys[color_mask]
-        color_points[color_hex] = list(zip(px.tolist(), py.tolist()))
+    color_points = group_mask_points_by_palette(rgb_arr, mask, palette_colors)
 
     emit_status(
         "Lettura bitmap completata: "
@@ -701,6 +899,9 @@ def run_pipeline(image_bytes, opts):
     color_count = max(1, int(opts.get("color_count", 1)))
     sample_colors = parse_sample_colors(opts.get("sample_colors", ""))
     sample_tolerance = float(opts.get("sample_tolerance", 0.0) or 0.0)
+    exclude_background = bool(opts.get("exclude_background", False))
+    background_colors = parse_sample_colors(opts.get("background_colors", ""))
+    background_tolerance = float(opts.get("background_tolerance", 0.0) or 0.0)
     color_points, size, source_dpi = load_points_grouped_from_bytes(
         image_bytes,
         max_width=max_width,
@@ -708,6 +909,9 @@ def run_pipeline(image_bytes, opts):
         color_count=color_count,
         sample_colors=sample_colors if sample_colors else None,
         sample_tolerance=sample_tolerance,
+        exclude_background=exclude_background,
+        background_colors=background_colors if background_colors else None,
+        background_tolerance=background_tolerance,
     )
     if not color_points:
         raise ValueError(
@@ -721,6 +925,12 @@ def run_pipeline(image_bytes, opts):
         emit_status(
             "Campionamento colori attivo: "
             f"{', '.join(printable)} con tolleranza {sample_tolerance:.2f}"
+        )
+    if exclude_background and background_colors:
+        printable_bg = [f"#{r:02X}{g:02X}{b:02X}" for (r, g, b) in background_colors]
+        emit_status(
+            "Esclusione sfondo attiva: "
+            f"{', '.join(printable_bg)} con tolleranza {background_tolerance:.2f}"
         )
     base_seed = None
     if opts["style"] == "degrade":
@@ -867,3 +1077,7 @@ def run_pipeline_browser(image_bytes, options):
         "summary": summary,
         "colors": colors,
     }
+
+
+def analyze_preview_browser(image_bytes, options):
+    return analyze_preview(image_bytes, options)
