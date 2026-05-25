@@ -153,15 +153,32 @@
         text-decoration: underline;
       }
       #download-link,
-      #download-multi {
+      #download-multi,
+      #download-preset {
         display: none;
         font-weight: 600;
         color: var(--accent);
         text-decoration: none;
       }
       #download-link:hover,
-      #download-multi:hover {
+      #download-multi:hover,
+      #download-preset:hover {
         text-decoration: underline;
+      }
+      .preset-upload {
+        display: inline-flex;
+        min-height: 2.35rem;
+        align-items: center;
+        justify-content: center;
+        border-radius: 0.35rem;
+        padding: 0.55rem 1rem;
+        font-size: 0.94rem;
+        font-weight: 650;
+        cursor: pointer;
+        box-sizing: border-box;
+      }
+      .preset-upload input {
+        display: none;
       }
       .color-downloads {
         display: none;
@@ -661,6 +678,10 @@
         <button id="open-help" class="btn-secondary" type="button">
           Guida parametri
         </button>
+        <label class="btn-secondary preset-upload" for="preset-file">
+          Carica preset
+          <input id="preset-file" type="file" accept="application/json,.json,image/svg+xml,.svg" />
+        </label>
         <a
           class="local-download"
           href="https://github.com/LorenzoErcoli/bitmap_to_stitch/releases/latest/download/BitmapToStitch-Windows.zip"
@@ -671,6 +692,9 @@
         >
         <a id="download-multi" href="#" download="bitmap-stitch-multi.svg"
           >Scarica SVG multicolore</a
+        >
+        <a id="download-preset" href="#" download="bitmap-stitch-params.json"
+          >Scarica parametri</a
         >
       </div>
 

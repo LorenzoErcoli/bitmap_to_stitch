@@ -1,6 +1,8 @@
 const statusEl = document.getElementById("status");
 const downloadEl = document.getElementById("download-link");
 const multiDownloadEl = document.getElementById("download-multi");
+const presetDownloadEl = document.getElementById("download-preset");
+const presetInputEl = document.getElementById("preset-file");
 const colorDownloadsEl = document.getElementById("color-downloads");
 const progressBarEl = document.getElementById("progress-bar");
 const progressTextEl = document.getElementById("progress-text");
@@ -18,6 +20,7 @@ let pyodideReady = null;
 let colorDownloadUrls = [];
 let monoDownloadUrl = null;
 let multiDownloadUrl = null;
+let presetDownloadUrl = null;
 
 function canUseLocalBackend() {
   return (
@@ -95,6 +98,125 @@ function readOptions() {
   };
 }
 
+function setControlValue(id, value) {
+  const el = document.getElementById(id);
+  if (!el || value === undefined || value === null) {
+    return;
+  }
+  if (el.type === "checkbox") {
+    el.checked = Boolean(value);
+  } else {
+    el.value = String(value);
+  }
+}
+
+function applyOptions(options) {
+  if (!options || typeof options !== "object") {
+    throw new Error("Preset non valido: options mancanti.");
+  }
+
+  const fieldMap = {
+    style: "style",
+    max_width: "max-width",
+    threshold: "threshold",
+    sample_colors: "sample-colors",
+    sample_tolerance: "sample-tolerance",
+    exclude_background: "exclude-background",
+    background_colors: "background-colors",
+    background_tolerance: "background-tolerance",
+    default_dpi: "default-dpi",
+    max_points: "max-points",
+    target_density: "target-density",
+    scale: "scale",
+    analysis_cell_mm: "analysis-cell-mm",
+    stroke_width: "stroke-width",
+    min_dist: "min-dist",
+    reinsertion_rounds: "reinsertion",
+    chunk_size: "chunk-size",
+    ordering: "ordering",
+    scanline_band: "scanline-band",
+    serpentine: "serpentine",
+    grid_cell_size: "grid-cell",
+    degrade_drop: "degrade-drop",
+    degrade_jitter: "degrade-jitter",
+    degrade_seed: "degrade-seed",
+    color_count: "color-count",
+  };
+
+  Object.entries(fieldMap).forEach(([key, id]) => {
+    setControlValue(id, options[key]);
+  });
+
+  document.getElementById("style").dispatchEvent(new Event("change"));
+}
+
+function parsePresetText(text) {
+  try {
+    return JSON.parse(text);
+  } catch (_) {
+    const doc = new DOMParser().parseFromString(text, "image/svg+xml");
+    const metadata = doc.querySelector("#bitmap-to-stitch-params");
+    if (!metadata || !metadata.textContent) {
+      throw new Error("Il file non contiene un preset valido.");
+    }
+    return JSON.parse(metadata.textContent);
+  }
+}
+
+function sanitizeFileStem(name) {
+  return (name || "stitch")
+    .replace(/\.[^.]+$/, "")
+    .replace(/[^a-z0-9_-]+/gi, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLowerCase() || "stitch";
+}
+
+function buildPresetPayload(options, sourceFile, result) {
+  return {
+    schema: "bitmap-to-stitch-preset/v1",
+    app: "BitmapToStitch",
+    created_at: new Date().toISOString(),
+    source_file: sourceFile
+      ? {
+          name: sourceFile.name,
+          size: sourceFile.size,
+          type: sourceFile.type || "",
+        }
+      : null,
+    options,
+    result_summary: result?.summary || "",
+    colors: (result?.colors || []).map((info) => ({
+      color: info.color,
+      initial_points: info.initial_points,
+      final_points: info.final_points,
+      discarded_points: info.discarded_points,
+      allocated_max_points: info.allocated_max_points,
+    })),
+  };
+}
+
+function escapeXmlText(text) {
+  return String(text)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function injectSvgMetadata(svgStr, presetPayload, extra = {}) {
+  const metadata = {
+    ...presetPayload,
+    export: {
+      ...(presetPayload.export || {}),
+      ...extra,
+    },
+  };
+  const metadataEl =
+    `<metadata id="bitmap-to-stitch-params" type="application/json">` +
+    `${escapeXmlText(JSON.stringify(metadata, null, 2))}` +
+    `</metadata>`;
+  return String(svgStr || "").replace(/(<svg\b[^>]*>)/, `$1\n${metadataEl}`);
+}
+
 function resetPrimaryDownloads() {
   if (downloadEl) {
     downloadEl.style.display = "none";
@@ -110,6 +232,13 @@ function resetPrimaryDownloads() {
     URL.revokeObjectURL(multiDownloadUrl);
     multiDownloadUrl = null;
   }
+  if (presetDownloadEl) {
+    presetDownloadEl.style.display = "none";
+  }
+  if (presetDownloadUrl) {
+    URL.revokeObjectURL(presetDownloadUrl);
+    presetDownloadUrl = null;
+  }
 }
 
 function resetColorDownloads() {
@@ -121,7 +250,7 @@ function resetColorDownloads() {
   }
 }
 
-function renderColorDownloads(colors, baseName) {
+function renderColorDownloads(colors, baseName, presetPayload) {
   resetColorDownloads();
   if (!colorDownloadsEl || !Array.isArray(colors) || colors.length === 0) {
     return;
@@ -150,8 +279,12 @@ function renderColorDownloads(colors, baseName) {
     const link = document.createElement("a");
     link.textContent = "Download";
     link.className = "color-download-link";
+    const svgWithMetadata = injectSvgMetadata(info.svg, presetPayload, {
+      output_type: "single_color",
+      color: info.color || "",
+    });
     const url = URL.createObjectURL(
-      new Blob([info.svg], { type: "image/svg+xml" })
+      new Blob([svgWithMetadata], { type: "image/svg+xml" })
     );
     colorDownloadUrls.push(url);
     link.href = url;
@@ -177,6 +310,22 @@ function renderColorDownloads(colors, baseName) {
 
   colorDownloadsEl.appendChild(fragment);
   colorDownloadsEl.style.display = "flex";
+}
+
+function renderPresetDownload(presetPayload, baseName) {
+  if (!presetDownloadEl) {
+    return;
+  }
+  if (presetDownloadUrl) {
+    URL.revokeObjectURL(presetDownloadUrl);
+  }
+  const json = JSON.stringify(presetPayload, null, 2);
+  presetDownloadUrl = URL.createObjectURL(
+    new Blob([json], { type: "application/json" })
+  );
+  presetDownloadEl.href = presetDownloadUrl;
+  presetDownloadEl.download = `${baseName}-params.json`;
+  presetDownloadEl.style.display = "inline-block";
 }
 
 function imageDataUrl(base64) {
@@ -336,9 +485,13 @@ async function handleConvert() {
     const summary = result.summary;
     console.log("SVG preview:", svgStr.slice(0, 120));
 
-    const baseName = file.name.replace(/\.[^.]+$/, "") || "stitch";
+    const baseName = sanitizeFileStem(file.name);
+    const presetPayload = buildPresetPayload(options, file, result);
 
-    const multiBlob = new Blob([svgStr], { type: "image/svg+xml" });
+    const multiSvg = injectSvgMetadata(svgStr, presetPayload, {
+      output_type: "multi_color",
+    });
+    const multiBlob = new Blob([multiSvg], { type: "image/svg+xml" });
     const multiUrl = URL.createObjectURL(multiBlob);
     multiDownloadUrl = multiUrl;
     if (multiDownloadEl) {
@@ -351,19 +504,43 @@ async function handleConvert() {
       typeof result.mono_svg === "string" && result.mono_svg.trim().length > 0
         ? result.mono_svg
         : svgStr;
-    const monoBlob = new Blob([monoSvg], { type: "image/svg+xml" });
+    const monoSvgWithMetadata = injectSvgMetadata(monoSvg, presetPayload, {
+      output_type: "mono",
+    });
+    const monoBlob = new Blob([monoSvgWithMetadata], { type: "image/svg+xml" });
     monoDownloadUrl = URL.createObjectURL(monoBlob);
     downloadEl.href = monoDownloadUrl;
     downloadEl.download = `${baseName}-mono.svg`;
     downloadEl.style.display = "inline-block";
 
-    renderColorDownloads(result.colors || [], baseName);
+    renderColorDownloads(result.colors || [], baseName, presetPayload);
+    renderPresetDownload(presetPayload, baseName);
     setProgress(100, "Completato");
     pushStatus(summary);
   } catch (error) {
     console.error("Errore durante la conversione:", error);
     setProgress(100, "Errore");
     pushStatus(`Errore: ${error.message || error}`);
+  }
+}
+
+async function handlePresetLoad(event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) {
+    return;
+  }
+  try {
+    const text = await file.text();
+    const preset = parsePresetText(text);
+    const options = preset.options || preset;
+    applyOptions(options);
+    statusEl.innerText =
+      `Preset caricato: ${file.name}\n` +
+      "Puoi analizzare la preview o generare un nuovo SVG con questi parametri.";
+  } catch (error) {
+    statusEl.innerText = `Errore preset: ${error.message || error}`;
+  } finally {
+    event.target.value = "";
   }
 }
 
@@ -534,6 +711,10 @@ document.addEventListener("keydown", (event) => {
     closeLightbox();
   }
 });
+
+if (presetInputEl) {
+  presetInputEl.addEventListener("change", handlePresetLoad);
+}
 
 convertBtn.addEventListener("click", () => {
   handleConvert();
