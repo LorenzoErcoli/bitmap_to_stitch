@@ -11,6 +11,7 @@ const previewBtn = document.getElementById("preview");
 const previewPanelEl = document.getElementById("preview-panel");
 const previewImageEl = document.getElementById("preview-image");
 const previewMaskEl = document.getElementById("preview-mask");
+const previewPointsEl = document.getElementById("preview-points");
 const previewStatsEl = document.getElementById("preview-stats");
 const previewColorsEl = document.getElementById("preview-colors");
 const lightboxEl = document.getElementById("image-lightbox");
@@ -344,11 +345,15 @@ function renderPreview(result) {
   if (previewMaskEl && result.mask_png_base64) {
     previewMaskEl.src = imageDataUrl(result.mask_png_base64);
   }
+  if (previewPointsEl && result.points_png_base64) {
+    previewPointsEl.src = imageDataUrl(result.points_png_base64);
+  }
   if (previewStatsEl) {
     previewStatsEl.textContent =
       `${result.width}x${result.height}px - ` +
       `${result.selected_pixels} pixel selezionati ` +
-      `(${Number(result.selected_pct || 0).toFixed(1)}%)`;
+      `(${Number(result.selected_pct || 0).toFixed(1)}%) - ` +
+      `${result.preview_points || 0} punti preview`;
   }
   if (!previewColorsEl) {
     return;

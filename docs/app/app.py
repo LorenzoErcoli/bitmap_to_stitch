@@ -368,6 +368,112 @@ def build_preview_from_color_points(rgb_arr, color_points):
     }
 
 
+def build_points_preview(rgb_arr, color_points):
+    h, w, _ = rgb_arr.shape
+    preview = (
+        rgb_arr.astype(np.float32) * 0.18
+        + np.full((h, w, 3), 245, dtype=np.float32) * 0.82
+    ).astype(np.uint8)
+    radius = max(1, int(round(max(w, h) / 650.0)))
+    offsets = []
+    for dy in range(-radius, radius + 1):
+        for dx in range(-radius, radius + 1):
+            if (dx * dx + dy * dy) <= radius * radius:
+                offsets.append((dx, dy))
+
+    total_points = 0
+    for color_hex, points in color_points.items():
+        if not points:
+            continue
+        total_points += len(points)
+        color = np.array(parse_hex_color(color_hex), dtype=np.uint8)
+        for x, y in points:
+            xi = int(round(x))
+            yi = int(round(y))
+            for dx, dy in offsets:
+                px = xi + dx
+                py = yi + dy
+                if 0 <= px < w and 0 <= py < h:
+                    preview[py, px] = color
+
+    return {
+        "points_png_base64": png_base64_from_array(preview),
+        "preview_points": int(total_points),
+    }
+
+
+def resolve_dpi_for_mm(effective_dpi, default_dpi=96.0):
+    dpi_for_mm = float(default_dpi or 96.0)
+    if isinstance(effective_dpi, (tuple, list)) and len(effective_dpi) >= 2:
+        dpi_for_mm = (float(effective_dpi[0]) + float(effective_dpi[1])) / 2.0
+    elif isinstance(effective_dpi, (int, float)) and effective_dpi > 0:
+        dpi_for_mm = float(effective_dpi)
+    return dpi_for_mm
+
+
+def prepare_points_before_ordering(
+    points,
+    opts,
+    image_size,
+    effective_dpi,
+    color_hex,
+    color_idx=0,
+    seed_base=None,
+    max_points_for_color=0,
+    report=False,
+):
+    working = points[:]
+    dpi_for_mm = resolve_dpi_for_mm(
+        effective_dpi, float(opts.get("default_dpi", 96.0) or 96.0)
+    )
+    analysis_cell_mm = float(opts.get("analysis_cell_mm", 0.0) or 0.0)
+
+    if analysis_cell_mm >= 1.0 and opts["scale"] > 0:
+        cell_px = analysis_cell_mm * (dpi_for_mm / 25.4) / float(opts["scale"])
+        if cell_px > 1.0:
+            before = len(working)
+            working = regularize_points_on_grid(working, cell_px)
+            if report:
+                emit_status(
+                    f"{color_hex}: analisi griglia metrica {analysis_cell_mm:.2f} mm ({cell_px:.2f} px) -> {len(working)} punti (prima {before})"
+                )
+        elif report:
+            emit_status(
+                f"{color_hex}: analysis-cell {analysis_cell_mm:.2f} mm troppo fine rispetto alla scala corrente ({opts['scale']:.4f}); nessuna regolarizzazione metrica."
+            )
+
+    if opts["style"] == "degrade":
+        seed = (seed_base + color_idx) if seed_base is not None else None
+        if report:
+            emit_status(
+                f"{color_hex}: applico stile degrade (drop={opts['degrade_drop']:.2f}, jitter={opts['degrade_jitter']:.2f})"
+            )
+        working = apply_random_degrade_effects(
+            working,
+            drop_probability=opts["degrade_drop"],
+            jitter=opts["degrade_jitter"],
+            image_size=image_size,
+            seed=seed,
+        )
+    elif opts["grid_cell_size"] > 1:
+        if report:
+            emit_status(
+                f"{color_hex}: regolarizzo griglia (cell={opts['grid_cell_size']} px)"
+            )
+        working = regularize_points_on_grid(working, opts["grid_cell_size"])
+
+    max_points = int(max_points_for_color) if max_points_for_color else 0
+    if max_points > 0 and len(working) > max_points:
+        before = len(working)
+        working = subsample_points(working, max_points=max_points)
+        if report:
+            emit_status(
+                f"{color_hex}: limito max-points a {len(working)} (prima {before})"
+            )
+
+    return working
+
+
 def analyze_preview(image_bytes, opts):
     if not isinstance(image_bytes, (bytes, bytearray)):
         image_bytes = bytes(image_bytes)
@@ -381,12 +487,22 @@ def analyze_preview(image_bytes, opts):
     background_tolerance = float(opts.get("background_tolerance", 0.0) or 0.0)
 
     original = Image.open(io.BytesIO(image_bytes))
+    source_dpi = extract_source_dpi(original.info)
     img = original.convert("RGBA")
+    resize_scale = 1.0
     if max_width is not None and max_width > 0:
         w, h = img.size
         if w > max_width:
             scale = max_width / float(w)
+            resize_scale = scale
             img = img.resize((max_width, int(h * scale)), Image.Resampling.LANCZOS)
+
+    effective_dpi = source_dpi
+    if effective_dpi is not None and resize_scale != 1.0:
+        effective_dpi = (
+            float(effective_dpi[0]) * resize_scale,
+            float(effective_dpi[1]) * resize_scale,
+        )
 
     rgb_arr = np.array(img.convert("RGB"))
     luminance = np.array(img.convert("L"))
@@ -416,6 +532,34 @@ def analyze_preview(image_bytes, opts):
         priority_tolerance=sample_tolerance,
     )
     preview = build_preview_from_color_points(rgb_arr, color_points)
+    base_seed = None
+    if opts["style"] == "degrade":
+        seed_raw = opts.get("degrade_seed")
+        if seed_raw not in (None, ""):
+            try:
+                base_seed = int(seed_raw)
+            except (TypeError, ValueError):
+                base_seed = None
+    budget_info = resolve_global_point_budget(
+        color_points,
+        opts.get("max_points", 0),
+        opts.get("target_density", 0.0),
+    )
+    per_color_max = allocate_max_points_by_color(color_points, budget_info["budget"])
+    preview_point_groups = {}
+    for idx, color_hex in enumerate(sorted(color_points.keys())):
+        preview_point_groups[color_hex] = prepare_points_before_ordering(
+            color_points[color_hex],
+            opts,
+            img.size,
+            effective_dpi,
+            color_hex,
+            color_idx=idx,
+            seed_base=base_seed,
+            max_points_for_color=per_color_max.get(color_hex, 0),
+            report=False,
+        )
+    preview.update(build_points_preview(rgb_arr, preview_point_groups))
     colors = []
     for info in preview.pop("colors"):
         count = int(info["pixel_count"])
@@ -928,12 +1072,9 @@ def process_color_points(
             "discarded_points": 0,
         }
 
-    analysis_cell_mm = float(opts.get("analysis_cell_mm", 0.0) or 0.0)
-    dpi_for_mm = float(opts.get("default_dpi", 96.0) or 96.0)
-    if isinstance(effective_dpi, (tuple, list)) and len(effective_dpi) >= 2:
-        dpi_for_mm = (float(effective_dpi[0]) + float(effective_dpi[1])) / 2.0
-    elif isinstance(effective_dpi, (int, float)) and effective_dpi > 0:
-        dpi_for_mm = float(effective_dpi)
+    dpi_for_mm = resolve_dpi_for_mm(
+        effective_dpi, float(opts.get("default_dpi", 96.0) or 96.0)
+    )
 
     min_dist_px = 0.0
     if opts["min_dist"] > 0:
@@ -942,42 +1083,17 @@ def process_color_points(
         else:
             min_dist_px = opts["min_dist"] * (dpi_for_mm / 25.4)
 
-    if analysis_cell_mm >= 1.0 and opts["scale"] > 0:
-        cell_px = analysis_cell_mm * (dpi_for_mm / 25.4) / float(opts["scale"])
-        if cell_px > 1.0:
-            before = len(working)
-            working = regularize_points_on_grid(working, cell_px)
-            emit_status(
-                f"{color_hex}: analisi griglia metrica {analysis_cell_mm:.2f} mm ({cell_px:.2f} px) -> {len(working)} punti (prima {before})"
-            )
-        else:
-            emit_status(
-                f"{color_hex}: analysis-cell {analysis_cell_mm:.2f} mm troppo fine rispetto alla scala corrente ({opts['scale']:.4f}); nessuna regolarizzazione metrica."
-            )
-
-    if opts["style"] == "degrade":
-        seed = (seed_base + color_idx) if seed_base is not None else None
-        emit_status(
-            f"{color_hex}: applico stile degrade (drop={opts['degrade_drop']:.2f}, jitter={opts['degrade_jitter']:.2f})"
-        )
-        working = apply_random_degrade_effects(
-            working,
-            drop_probability=opts["degrade_drop"],
-            jitter=opts["degrade_jitter"],
-            image_size=image_size,
-            seed=seed,
-        )
-    elif opts["grid_cell_size"] > 1:
-        emit_status(f"{color_hex}: regolarizzo griglia (cell={opts['grid_cell_size']} px)")
-        working = regularize_points_on_grid(working, opts["grid_cell_size"])
-
-    max_points = int(max_points_for_color) if max_points_for_color else 0
-    if max_points > 0 and len(working) > max_points:
-        before = len(working)
-        working = subsample_points(working, max_points=max_points)
-        emit_status(
-            f"{color_hex}: limito max-points a {len(working)} (prima {before})"
-        )
+    working = prepare_points_before_ordering(
+        working,
+        opts,
+        image_size,
+        effective_dpi,
+        color_hex,
+        color_idx=color_idx,
+        seed_base=seed_base,
+        max_points_for_color=max_points_for_color,
+        report=True,
+    )
 
     if not working:
         return {
@@ -1021,7 +1137,7 @@ def process_color_points(
         "initial_points": initial_points,
         "final_points": len(final_path),
         "discarded_points": len(discarded),
-        "allocated_max_points": max_points,
+        "allocated_max_points": int(max_points_for_color) if max_points_for_color else 0,
     }
 
 
