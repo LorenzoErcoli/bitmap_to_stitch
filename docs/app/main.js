@@ -655,7 +655,9 @@ async function runWithPyodide(imageBytes, options, pushStatus) {
     return result;
   } finally {
     pyodide.runPython("status_callback = None");
-    reportStatus.destroy();
+    if (typeof reportStatus.destroy === "function") {
+      reportStatus.destroy();
+    }
   }
 }
 

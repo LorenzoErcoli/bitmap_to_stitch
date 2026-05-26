@@ -137,21 +137,51 @@ def group_mask_points_by_palette(rgb_arr, mask, color_count):
 def group_points_with_priority_colors(
     rgb_arr, mask, color_count, priority_colors=None, priority_tolerance=0.0
 ):
+    target_count = max(1, int(color_count))
+    if priority_colors:
+        color_points = {}
+        priority_matches = []
+        for color in priority_colors:
+            color_mask = mask & build_color_match_mask(
+                rgb_arr, [color], priority_tolerance
+            )
+            if not np.any(color_mask):
+                continue
+            color_hex = f"#{color[0]:02X}{color[1]:02X}{color[2]:02X}"
+            ys, xs = np.where(color_mask)
+            priority_matches.append(
+                {
+                    "color_hex": color_hex,
+                    "points": list(zip(xs.tolist(), ys.tolist())),
+                    "count": int(len(xs)),
+                    "mask": color_mask,
+                }
+            )
+
+        priority_matches.sort(key=lambda item: item["count"], reverse=True)
+        selected_priority = priority_matches[:target_count]
+        remaining_mask = mask.copy()
+
+        for item in selected_priority:
+            color_points.setdefault(item["color_hex"], []).extend(item["points"])
+            remaining_mask &= ~item["mask"]
+
+        remaining_slots = target_count - len(color_points)
+        if remaining_slots > 0 and np.any(remaining_mask):
+            palette_groups = group_mask_points_by_palette(
+                rgb_arr, remaining_mask, remaining_slots
+            )
+            for color_hex, points in palette_groups.items():
+                if len(color_points) >= target_count:
+                    break
+                color_points.setdefault(color_hex, []).extend(points)
+
+        return color_points
+
     color_points = {}
     remaining_mask = mask.copy()
 
-    for color in priority_colors or []:
-        color_mask = remaining_mask & build_color_match_mask(
-            rgb_arr, [color], priority_tolerance
-        )
-        if not np.any(color_mask):
-            continue
-        color_hex = f"#{color[0]:02X}{color[1]:02X}{color[2]:02X}"
-        ys, xs = np.where(color_mask)
-        color_points.setdefault(color_hex, []).extend(zip(xs.tolist(), ys.tolist()))
-        remaining_mask &= ~color_mask
-
-    palette_groups = group_mask_points_by_palette(rgb_arr, remaining_mask, color_count)
+    palette_groups = group_mask_points_by_palette(rgb_arr, remaining_mask, target_count)
     for color_hex, points in palette_groups.items():
         color_points.setdefault(color_hex, []).extend(points)
 
