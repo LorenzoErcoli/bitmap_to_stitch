@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Bitmap To Stitch</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+        background: #f5f6f8;
+        color: #172033;
+      }
+      body {
+        margin: 0;
+      }
+      main {
+        max-width: 860px;
+        margin: 0 auto;
+        padding: 48px 24px;
+      }
+      h1 {
+        margin: 0 0 12px;
+        font-size: clamp(2rem, 5vw, 3.4rem);
+        line-height: 1.05;
+      }
+      p {
+        font-size: 1.05rem;
+        line-height: 1.55;
+        color: #4b5568;
+      }
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin: 28px 0 34px;
+      }
+      a.button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 44px;
+        padding: 0 18px;
+        border-radius: 8px;
+        text-decoration: none;
+        font-weight: 700;
+      }
+      .primary {
+        background: #0b63ce;
+        color: #fff;
+      }
+      .secondary {
+        background: #fff;
+        color: #1b365f;
+        border: 1px solid #c8d2e2;
+      }
+      section {
+        border-top: 1px solid #d9dee8;
+        padding-top: 22px;
+      }
+      ol {
+        color: #344154;
+        line-height: 1.7;
+        padding-left: 22px;
+      }
+      code {
+        background: #e9edf4;
+        border-radius: 4px;
+        padding: 2px 5px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Bitmap To Stitch</h1>
+      <p>
+        Converti bitmap in tracciati SVG per ricamo. Puoi usarlo subito online
+        nel browser oppure scaricare l'app locale per lavorare piu velocemente
+        con file grandi.
+      </p>
+      <div class="actions">
+        <a class="button primary" href="./app/">Usa online</a>
+        <a
+          class="button secondary"
+          href="https://github.com/LorenzoErcoli/bitmap_to_stitch/releases/latest/download/BitmapToStitch-Windows.zip"
+          >Scarica app locale</a
+        >
+        <a
+          class="button secondary"
+          href="https://github.com/LorenzoErcoli/bitmap_to_stitch/releases/latest"
+          >Vedi release</a
+        >
+      </div>
+      <section>
+        <h2>Quale versione usare</h2>
+        <ol>
+          <li><strong>Usa online</strong>: non installi nulla, ideale per test rapidi e immagini leggere.</li>
+          <li><strong>App locale</strong>: consigliata per conversioni piu grandi e piu veloci.</li>
+        </ol>
+      </section>
+      <section>
+        <h2>Installazione app locale</h2>
+        <ol>
+          <li>Scarica <code>BitmapToStitch-Windows.zip</code>.</li>
+          <li>Estrai la cartella zip.</li>
+          <li>Avvia <code>BitmapToStitch.exe</code>.</li>
+          <li>Il browser si aprira' su <code>http://127.0.0.1:8765/</code>.</li>
+        </ol>
+        <p>
+          Al primo avvio Windows potrebbe mostrare un avviso SmartScreen per app
+          non firmate. Per rimuoverlo serve una firma digitale del programma.
+        </p>
+      </section>
+    </main>
+  </body>
+</html>

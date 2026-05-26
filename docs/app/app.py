@@ -134,6 +134,30 @@ def group_mask_points_by_palette(rgb_arr, mask, color_count):
     return group_mask_points_with_palette(rgb_arr, mask, palette)
 
 
+def group_points_with_priority_colors(
+    rgb_arr, mask, color_count, priority_colors=None, priority_tolerance=0.0
+):
+    color_points = {}
+    remaining_mask = mask.copy()
+
+    for color in priority_colors or []:
+        color_mask = remaining_mask & build_color_match_mask(
+            rgb_arr, [color], priority_tolerance
+        )
+        if not np.any(color_mask):
+            continue
+        color_hex = f"#{color[0]:02X}{color[1]:02X}{color[2]:02X}"
+        ys, xs = np.where(color_mask)
+        color_points.setdefault(color_hex, []).extend(zip(xs.tolist(), ys.tolist()))
+        remaining_mask &= ~color_mask
+
+    palette_groups = group_mask_points_by_palette(rgb_arr, remaining_mask, color_count)
+    for color_hex, points in palette_groups.items():
+        color_points.setdefault(color_hex, []).extend(points)
+
+    return color_points
+
+
 def group_mask_points_with_palette(rgb_arr, mask, palette):
     ys, xs = np.where(mask)
     if len(palette) == 0:
@@ -228,6 +252,41 @@ def build_preview_images(rgb_arr, mask, palette):
     }
 
 
+def build_preview_from_color_points(rgb_arr, color_points):
+    h, w, _ = rgb_arr.shape
+    overlay = rgb_arr.astype(np.float32)
+    mask_preview = np.full((h, w, 3), 245, dtype=np.uint8)
+    color_payload = []
+
+    for color_hex, points in color_points.items():
+        if not points:
+            continue
+        r, g, b = parse_hex_color(color_hex)
+        color = np.array([r, g, b], dtype=np.uint8)
+        xs = np.array([p[0] for p in points], dtype=np.int32)
+        ys = np.array([p[1] for p in points], dtype=np.int32)
+
+        mask_preview[ys, xs] = color
+        overlay[ys, xs] = overlay[ys, xs] * 0.35 + color.astype(np.float32) * 0.65
+
+        single = np.full((h, w, 4), 0, dtype=np.uint8)
+        single[ys, xs, :3] = color
+        single[ys, xs, 3] = 255
+        color_payload.append(
+            {
+                "color": color_hex,
+                "pixel_count": int(len(points)),
+                "mask_png_base64": png_base64_from_array(single),
+            }
+        )
+
+    return {
+        "overlay_png_base64": png_base64_from_array(overlay),
+        "mask_png_base64": png_base64_from_array(mask_preview),
+        "colors": color_payload,
+    }
+
+
 def analyze_preview(image_bytes, opts):
     if not isinstance(image_bytes, (bytes, bytearray)):
         image_bytes = bytes(image_bytes)
@@ -268,25 +327,20 @@ def analyze_preview(image_bytes, opts):
             "Nessun pixel utile trovato per la preview. Modifica soglia, colori o sfondo escluso."
         )
 
-    palette = build_palette_from_selected_pixels(rgb_arr, mask, color_count)
-    preview = build_preview_images(rgb_arr, mask, palette)
-    counts = preview.pop("counts")
-
+    color_points = group_points_with_priority_colors(
+        rgb_arr,
+        mask,
+        color_count,
+        priority_colors=sample_colors,
+        priority_tolerance=sample_tolerance,
+    )
+    preview = build_preview_from_color_points(rgb_arr, color_points)
     colors = []
-    for idx, color in enumerate(palette.astype(np.uint8)):
-        count = counts[idx] if idx < len(counts) else 0
-        if count <= 0:
-            continue
-        colors.append(
-            {
-                "color": f"#{color[0]:02X}{color[1]:02X}{color[2]:02X}",
-                "pixel_count": count,
-                "area_pct": (100.0 * count / total_pixels) if total_pixels else 0.0,
-                "mask_png_base64": preview["color_mask_pngs"][idx],
-            }
-        )
+    for info in preview.pop("colors"):
+        count = int(info["pixel_count"])
+        info["area_pct"] = (100.0 * count / total_pixels) if total_pixels else 0.0
+        colors.append(info)
 
-    preview.pop("color_mask_pngs", None)
     preview.update(
         {
             "width": int(img.size[0]),
@@ -365,7 +419,13 @@ def load_points_grouped_from_bytes(
         return {}, img.size, effective_dpi
 
     palette_colors = max(1, int(color_count))
-    color_points = group_mask_points_by_palette(rgb_arr, mask, palette_colors)
+    color_points = group_points_with_priority_colors(
+        rgb_arr,
+        mask,
+        palette_colors,
+        priority_colors=sample_colors,
+        priority_tolerance=sample_tolerance,
+    )
 
     emit_status(
         "Lettura bitmap completata: "

@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8" />
+    <title>Bitmap → Stitch (Web)</title>
+    <script
+      defer
+      src="https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js"
+    ></script>
+    <script type="module" defer src="main.js"></script>
+    <style>
+      :root {
+        font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+        color: #172033;
+        background: #eef2f7;
+        --panel: #ffffff;
+        --panel-soft: #f8fafc;
+        --line: #d8e0ea;
+        --line-strong: #bfccdb;
+        --text-muted: #5d6b7f;
+        --accent: #1264d8;
+        --accent-dark: #0d4fae;
+        --accent-soft: #e8f1ff;
+      }
+      body {
+        margin: 0;
+        background:
+          linear-gradient(180deg, #f8fafc 0, #eef2f7 260px),
+          #eef2f7;
+      }
+      main {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 1.25rem;
+      }
+      h1 {
+        margin: 0 0 0.35rem;
+        font-weight: 600;
+        font-size: 1.8rem;
+        line-height: 1.12;
+      }
+      p.lead {
+        margin-top: 0;
+        color: var(--text-muted);
+      }
+      fieldset {
+        border: 1px solid var(--line);
+        border-radius: 0.5rem;
+        margin-bottom: 1rem;
+        padding: 0.9rem 1rem 1rem;
+        background: var(--panel);
+        box-shadow: 0 1px 2px rgba(17, 31, 51, 0.04);
+      }
+      legend {
+        padding: 0 0.5rem;
+        font-weight: 600;
+        color: #253247;
+      }
+      .controls {
+        display: grid;
+        gap: 0.65rem 0.85rem;
+        grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+        margin-top: 0.75rem;
+      }
+      .control {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        font-size: 0.86rem;
+      }
+      .control label {
+        font-weight: 600;
+        margin-bottom: 0.22rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        color: #2a374b;
+      }
+      .control input,
+      .control select {
+        min-height: 2.25rem;
+        padding: 0.35rem 0.5rem;
+        border-radius: 0.35rem;
+        border: 1px solid var(--line-strong);
+        background: #fff;
+        color: #172033;
+        font-size: 0.92rem;
+        box-sizing: border-box;
+      }
+      .control input:focus,
+      .control select:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-soft);
+        outline: none;
+      }
+      .control input[type="checkbox"] {
+        min-height: 0;
+        width: 1rem;
+        height: 1rem;
+        accent-color: var(--accent);
+      }
+      .actions {
+        position: sticky;
+        bottom: 0;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.65rem;
+        margin: 1rem 0;
+        padding: 0.75rem;
+        background: rgba(248, 250, 252, 0.94);
+        border: 1px solid var(--line);
+        border-radius: 0.5rem;
+        box-shadow: 0 8px 24px rgba(17, 31, 51, 0.08);
+        backdrop-filter: blur(8px);
+      }
+      button {
+        min-height: 2.35rem;
+        background: var(--accent);
+        color: #fff;
+        border: none;
+        border-radius: 0.35rem;
+        padding: 0.55rem 1rem;
+        font-size: 0.94rem;
+        font-weight: 650;
+        cursor: pointer;
+      }
+      button:hover {
+        background: var(--accent-dark);
+      }
+      .btn-secondary {
+        background: #fff;
+        color: #173a6b;
+        border: 1px solid #b8c8de;
+      }
+      .btn-secondary:hover {
+        background: var(--accent-soft);
+      }
+      #convert {
+        padding-inline: 1.25rem;
+      }
+      #preview {
+        color: var(--accent-dark);
+      }
+      .local-download {
+        color: #29496f;
+        font-weight: 700;
+        text-decoration: none;
+        margin-left: auto;
+      }
+      .local-download:hover {
+        text-decoration: underline;
+      }
+      #download-link,
+      #download-multi,
+      #download-preset {
+        display: none;
+        font-weight: 600;
+        color: var(--accent);
+        text-decoration: none;
+      }
+      #download-link:hover,
+      #download-multi:hover,
+      #download-preset:hover {
+        text-decoration: underline;
+      }
+      .preset-upload {
+        display: inline-flex;
+        min-height: 2.35rem;
+        align-items: center;
+        justify-content: center;
+        border-radius: 0.35rem;
+        padding: 0.55rem 1rem;
+        font-size: 0.94rem;
+        font-weight: 650;
+        cursor: pointer;
+        box-sizing: border-box;
+      }
+      .preset-upload input {
+        display: none;
+      }
+      .color-downloads {
+        display: none;
+        flex-direction: column;
+        gap: 0.5rem;
+        margin: 0.75rem 0 1rem;
+      }
+      .color-downloads-title {
+        margin: 0;
+        font-weight: 600;
+        color: #333;
+      }
+      .color-card {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 0.5rem;
+        padding: 0.45rem 0.75rem;
+      }
+      .color-info {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-weight: 600;
+      }
+      .color-swatch {
+        width: 1.1rem;
+        height: 1.1rem;
+        border-radius: 0.2rem;
+        border: 1px solid #ccc;
+      }
+      .color-download-link {
+        color: #0053c7;
+        font-weight: 600;
+        text-decoration: none;
+      }
+      .color-download-link:hover {
+        text-decoration: underline;
+      }
+      .preview-panel {
+        display: none;
+        margin: 1rem 0;
+        padding: 1rem;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 0.5rem;
+        box-shadow: 0 1px 2px rgba(17, 31, 51, 0.04);
+      }
+      .preview-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(220px, 320px);
+        gap: 1rem;
+        align-items: start;
+      }
+      .preview-images {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 0.75rem;
+      }
+      .preview-frame {
+        background: var(--panel-soft);
+        border: 1px solid var(--line);
+        border-radius: 0.5rem;
+        padding: 0.6rem;
+      }
+      .preview-frame h3,
+      .preview-colors h3 {
+        margin: 0 0 0.5rem;
+        font-size: 0.95rem;
+        color: #253247;
+      }
+      .preview-frame img {
+        display: block;
+        width: 100%;
+        max-height: 420px;
+        object-fit: contain;
+        background: #f7f8fb;
+        border: 1px solid #edf0f5;
+        cursor: zoom-in;
+      }
+      .preview-stats {
+        margin: 0 0 0.65rem;
+        color: var(--text-muted);
+        font-size: 0.9rem;
+      }
+      .preview-colors {
+        background: var(--panel-soft);
+        border: 1px solid var(--line);
+        border-radius: 0.5rem;
+        padding: 0.65rem;
+      }
+      .preview-color-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+      .preview-color-card {
+        display: grid;
+        grid-template-columns: 52px minmax(0, 1fr);
+        gap: 0.55rem;
+        align-items: center;
+        border: 1px solid #e4e8ef;
+        border-radius: 0.4rem;
+        padding: 0.4rem;
+      }
+      .preview-color-mask {
+        width: 52px;
+        height: 52px;
+        object-fit: contain;
+        background: #f7f8fb;
+        border: 1px solid #edf0f5;
+        cursor: zoom-in;
+      }
+      .preview-color-meta {
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+        gap: 0.15rem;
+        font-size: 0.82rem;
+        color: #4a5668;
+      }
+      .preview-color-line {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 0.45rem;
+        color: #1f2c3d;
+      }
+      #status {
+        min-height: 4rem;
+        padding: 0.75rem;
+        background: var(--panel);
+        border-radius: 0.5rem;
+        border: 1px solid var(--line);
+        color: #26364d;
+        white-space: pre-wrap;
+      }
+      .progress-wrap {
+        margin: 0.5rem 0 1rem;
+      }
+      .progress-track {
+        width: 100%;
+        height: 10px;
+        background: #e6edf6;
+        border: 1px solid #c8d4e3;
+        border-radius: 999px;
+        overflow: hidden;
+      }
+      .progress-bar {
+        height: 100%;
+        width: 0%;
+        background: var(--accent);
+        transition: width 0.18s ease;
+      }
+      #progress-text {
+        margin: 0.4rem 0 0;
+        font-size: 0.82rem;
+        color: #4a5a70;
+      }
+      .modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(8, 17, 31, 0.55);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+        z-index: 40;
+      }
+      .modal-backdrop.open {
+        display: flex;
+      }
+      .image-lightbox {
+        position: fixed;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 1.2rem;
+        background: rgba(8, 17, 31, 0.78);
+        z-index: 60;
+      }
+      .image-lightbox.open {
+        display: flex;
+      }
+      .image-lightbox img {
+        max-width: min(96vw, 1400px);
+        max-height: 92vh;
+        object-fit: contain;
+        background: #fff;
+        border: 1px solid #dce2ec;
+        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+      }
+      .image-lightbox button {
+        position: absolute;
+        top: 1rem;
+        right: 1rem;
+        background: #fff;
+        color: #1d2a3d;
+        border: 1px solid #ccd6e6;
+      }
+      .modal {
+        width: min(980px, 100%);
+        max-height: 90vh;
+        overflow: auto;
+        background: #fff;
+        border-radius: 0.7rem;
+        border: 1px solid #d4dbe6;
+        box-shadow: 0 20px 48px rgba(18, 30, 48, 0.25);
+      }
+      .modal-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+        padding: 0.9rem 1rem;
+        border-bottom: 1px solid #ebeff5;
+      }
+      .modal-head h2 {
+        margin: 0;
+        font-size: 1.05rem;
+      }
+      .modal-close {
+        background: #fff;
+        color: #21314c;
+        border: 1px solid #ccd6e6;
+        padding: 0.35rem 0.7rem;
+      }
+      .modal-close:hover {
+        background: #f6f8fc;
+      }
+      .modal-body {
+        padding: 1rem;
+      }
+      .help-grid {
+        display: grid;
+        gap: 0.7rem;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      }
+      .help-card {
+        background: var(--panel-soft);
+        border: 1px solid var(--line);
+        border-radius: 0.5rem;
+        padding: 0.65rem 0.75rem;
+      }
+      .help-card h3 {
+        margin: 0 0 0.3rem;
+        font-size: 0.95rem;
+      }
+      .help-card p {
+        margin: 0;
+        font-size: 0.86rem;
+        color: #344154;
+      }
+      .help-note {
+        margin: 0 0 0.8rem;
+        font-size: 0.9rem;
+        color: #49576d;
+      }
+      .info-tip {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 1rem;
+        height: 1rem;
+        border-radius: 50%;
+        border: 1px solid #8aa6d6;
+        color: #2f5ea8;
+        font-size: 0.72rem;
+        line-height: 1;
+        background: #f2f7ff;
+        cursor: help;
+      }
+      .info-tip::after {
+        content: attr(data-tip);
+        position: absolute;
+        left: 50%;
+        bottom: calc(100% + 0.45rem);
+        transform: translateX(-50%);
+        min-width: 200px;
+        max-width: 260px;
+        padding: 0.42rem 0.5rem;
+        background: #1f2f46;
+        color: #fff;
+        border-radius: 0.35rem;
+        font-size: 0.75rem;
+        font-weight: 400;
+        line-height: 1.35;
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.12s ease;
+        z-index: 20;
+      }
+        .info-tip:hover::after,
+        .info-tip:focus::after {
+          opacity: 1;
+        }
+      @media (max-width: 760px) {
+        main {
+          padding: 0.8rem;
+        }
+        h1 {
+          font-size: 1.45rem;
+        }
+        .actions {
+          align-items: stretch;
+        }
+        .actions button,
+        .actions a {
+          width: 100%;
+          text-align: center;
+          box-sizing: border-box;
+        }
+        .local-download {
+          margin-left: 0;
+        }
+        .preview-layout {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Bitmap → Stitch (Web)</h1>
+      <p class="lead">
+        Carica un'immagine (anche a colori) per generare direttamente nel
+        browser tracce SVG pronte per la macchina da ricamo, una per ogni tinta.
+      </p>
+
+      <section>
+        <div class="control">
+          <label for="image">Bitmap <span class="info-tip" tabindex="0" data-tip="Immagine di input da convertire in tracciati stitch.">i</span></label>
+          <input
+            type="file"
+            id="image"
+            accept="image/*,.bmp,.png,.jpg,.jpeg,.gif,.webp"
+          />
+        </div>
+      </section>
+
+      <fieldset>
+        <legend>Impostazioni generali</legend>
+        <div class="controls">
+          <div class="control">
+            <label for="max-width">Max width (px) <span class="info-tip" tabindex="0" data-tip="Ridimensiona la larghezza prima della conversione. 0 = nessun resize.">i</span></label>
+            <input type="number" id="max-width" min="0" value="0" />
+          </div>
+          <div class="control">
+            <label for="threshold">Soglia (0-255) <span class="info-tip" tabindex="0" data-tip="Decide quali pixel considerare validi: piu alta include piu aree scure.">i</span></label>
+            <input type="number" id="threshold" min="0" max="255" value="200" />
+          </div>
+          <div class="control">
+            <label for="sample-colors">Sample colors <span class="info-tip" tabindex="0" data-tip="Lista colori da campionare (es. #000000,#FF0000). Vengono aggiunti alla selezione basata su soglia.">i</span></label>
+            <input type="text" id="sample-colors" placeholder="#000000,#FF0000" />
+          </div>
+          <div class="control">
+            <label for="sample-tolerance">Sample tolerance <span class="info-tip" tabindex="0" data-tip="Tolleranza colore RGB (0 = match esatto).">i</span></label>
+            <input type="number" id="sample-tolerance" min="0" step="1" value="24" />
+          </div>
+          <div class="control">
+            <label for="exclude-background">
+              <input type="checkbox" id="exclude-background" checked />
+              Escludi sfondo <span class="info-tip" tabindex="0" data-tip="Se attivo, i colori indicati come sfondo vengono rimossi dalla selezione. Disattivalo se vuoi ricamare il bianco.">i</span>
+            </label>
+          </div>
+          <div class="control">
+            <label for="background-colors">Background colors <span class="info-tip" tabindex="0" data-tip="Colori da ignorare come sfondo (es. #FFFFFF o #F8F8F8,#FFFFFF).">i</span></label>
+            <input type="text" id="background-colors" value="#FFFFFF" placeholder="#FFFFFF" />
+          </div>
+          <div class="control">
+            <label for="background-tolerance">Background tolerance <span class="info-tip" tabindex="0" data-tip="Tolleranza RGB per escludere sfondi quasi bianchi o leggermente colorati.">i</span></label>
+            <input type="number" id="background-tolerance" min="0" step="1" value="30" />
+          </div>
+          <div class="control">
+            <label for="color-count">Numero colori <span class="info-tip" tabindex="0" data-tip="Numero cluster colore usati in quantizzazione (1-12).">i</span></label>
+            <input type="number" id="color-count" min="1" max="12" value="2" />
+          </div>
+            <div class="control">
+              <label for="max-points">Max points <span class="info-tip" tabindex="0" data-tip="Budget massimo globale punti. Viene ripartito tra colori. 0 = disattivo.">i</span></label>
+              <input type="number" id="max-points" min="0" value="0" />
+            </div>
+            <div class="control">
+              <label for="target-density">Densita globale (%) <span class="info-tip" tabindex="0" data-tip="Percentuale punti da mantenere sul totale. Se usi anche max points, vince il piu restrittivo.">i</span></label>
+              <input
+                type="number"
+                id="target-density"
+                min="0"
+                max="100"
+                step="0.1"
+                value="4"
+              />
+            </div>
+            <div class="control">
+              <label for="scale">Scala SVG <span class="info-tip" tabindex="0" data-tip="Moltiplica coordinate finali: aumenta o riduce dimensione output.">i</span></label>
+              <input type="number" id="scale" step="0.1" value="1.0" />
+            </div>
+            <div class="control">
+              <label for="analysis-cell-mm">Analysis square (mm) <span class="info-tip" tabindex="0" data-tip="Regolarizza i punti su una griglia in millimetri (minimo 1 mm quando attivo).">i</span></label>
+              <input type="number" id="analysis-cell-mm" min="0" step="0.1" value="0" />
+            </div>
+            <div class="control">
+              <label for="default-dpi">Default DPI <span class="info-tip" tabindex="0" data-tip="Usato per conversioni mm quando l'immagine non contiene DPI.">i</span></label>
+              <input type="number" id="default-dpi" min="1" step="1" value="96" />
+            </div>
+          <div class="control">
+            <label for="stroke-width">Stroke width <span class="info-tip" tabindex="0" data-tip="Spessore linea nel file SVG esportato.">i</span></label>
+            <input type="number" id="stroke-width" step="0.1" value="0.3" />
+          </div>
+          <div class="control">
+            <label for="min-dist">Min dist (mm) <span class="info-tip" tabindex="0" data-tip="Distanza minima in millimetri reali tra punti consecutivi.">i</span></label>
+            <input type="number" id="min-dist" step="0.1" value="1.0" />
+          </div>
+          <div class="control">
+            <label for="reinsertion">Reinsertion rounds <span class="info-tip" tabindex="0" data-tip="Quanti tentativi fa per reinserire punti scartati dal min dist.">i</span></label>
+            <input type="number" id="reinsertion" min="0" value="1" />
+          </div>
+          <div class="control">
+            <label for="chunk-size">Path chunk size <span class="info-tip" tabindex="0" data-tip="Divide percorsi lunghi in blocchi. Utile per file molto pesanti.">i</span></label>
+            <input type="number" id="chunk-size" min="0" value="5000" />
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Stile e ordinamento</legend>
+        <div class="controls">
+          <div class="control">
+            <label for="style">Stile <span class="info-tip" tabindex="0" data-tip="Carpet = distribuzione regolare, Degrade = effetto casuale.">i</span></label>
+            <select id="style">
+              <option value="carpet" selected>Carpet (griglia uniforme)</option>
+              <option value="degrade">Degradé / Random</option>
+            </select>
+          </div>
+          <div class="control">
+            <label for="ordering">Ordering <span class="info-tip" tabindex="0" data-tip="Scanline segue bande ordinate, Nearest connette il punto piu vicino.">i</span></label>
+            <select id="ordering">
+              <option value="scanline" selected>Scanline</option>
+              <option value="nearest">Nearest Neighbor</option>
+            </select>
+          </div>
+          <div class="control">
+            <label for="scanline-band">Scanline band (px) <span class="info-tip" tabindex="0" data-tip="Altezza della banda usata in ordinamento scanline.">i</span></label>
+            <input type="number" id="scanline-band" min="1" value="4" />
+          </div>
+          <div class="control">
+            <label for="serpentine">
+              <input type="checkbox" id="serpentine" checked />
+              Serpentina <span class="info-tip" tabindex="0" data-tip="Alterna direzione tra bande per ridurre salti lunghi.">i</span>
+            </label>
+          </div>
+          <div class="control" data-group="carpet">
+            <label for="grid-cell">Grid cell (px) <span class="info-tip" tabindex="0" data-tip="Solo Carpet: collassa punti su celle regolari. Celle grandi = meno punti.">i</span></label>
+            <input type="number" id="grid-cell" min="0" value="4" />
+          </div>
+          <div class="control" data-group="degrade">
+            <label for="degrade-drop">Drop probability (0-1) <span class="info-tip" tabindex="0" data-tip="Solo Degrade: probabilita di scarto per ogni punto.">i</span></label>
+            <input
+              type="number"
+              id="degrade-drop"
+              min="0"
+              max="1"
+              step="0.05"
+              value="0.3"
+            />
+          </div>
+          <div class="control" data-group="degrade">
+            <label for="degrade-jitter">Jitter (px) <span class="info-tip" tabindex="0" data-tip="Solo Degrade: spostamento casuale massimo in pixel.">i</span></label>
+            <input
+              type="number"
+              id="degrade-jitter"
+              min="0"
+              step="0.1"
+              value="1.0"
+            />
+          </div>
+          <div class="control" data-group="degrade">
+            <label for="degrade-seed">Seed (facoltativo) <span class="info-tip" tabindex="0" data-tip="Solo Degrade: stesso seed = stesso risultato casuale.">i</span></label>
+            <input type="number" id="degrade-seed" />
+          </div>
+        </div>
+        <p class="lead" style="font-size: 0.85rem">
+          Le opzioni vengono applicate in base allo stile selezionato (carpet o
+          degradé).
+        </p>
+      </fieldset>
+
+      <div class="actions">
+        <button id="preview" class="btn-secondary" type="button">
+          Analizza preview
+        </button>
+        <button id="convert">Genera SVG</button>
+        <button id="open-help" class="btn-secondary" type="button">
+          Guida parametri
+        </button>
+        <label class="btn-secondary preset-upload" for="preset-file">
+          Carica preset
+          <input id="preset-file" type="file" accept="application/json,.json,image/svg+xml,.svg" />
+        </label>
+        <a
+          class="local-download"
+          href="https://github.com/LorenzoErcoli/bitmap_to_stitch/releases/latest/download/BitmapToStitch-Windows.zip"
+          >Scarica app locale</a
+        >
+        <a id="download-link" href="#" download="bitmap-stitch.svg"
+          >Scarica SVG (monocolore)</a
+        >
+        <a id="download-multi" href="#" download="bitmap-stitch-multi.svg"
+          >Scarica SVG multicolore</a
+        >
+        <a id="download-preset" href="#" download="bitmap-stitch-params.json"
+          >Scarica parametri</a
+        >
+      </div>
+
+      <div id="color-downloads" class="color-downloads"></div>
+
+      <section id="preview-panel" class="preview-panel" aria-live="polite">
+        <p id="preview-stats" class="preview-stats"></p>
+        <div class="preview-layout">
+          <div class="preview-images">
+            <div class="preview-frame">
+              <h3>Overlay aree selezionate</h3>
+              <img id="preview-image" alt="Preview overlay aree selezionate" />
+            </div>
+            <div class="preview-frame">
+              <h3>Maschera colori</h3>
+              <img id="preview-mask" alt="Preview maschera colori" />
+            </div>
+          </div>
+          <aside class="preview-colors">
+            <h3>Colori scelti</h3>
+            <div id="preview-colors" class="preview-color-list"></div>
+          </aside>
+        </div>
+      </section>
+
+      <div class="progress-wrap">
+        <div class="progress-track">
+          <div id="progress-bar" class="progress-bar"></div>
+        </div>
+        <p id="progress-text">Avanzamento: 0%</p>
+      </div>
+
+      <p id="status">Carica un'immagine per iniziare.</p>
+    </main>
+    <div id="param-help-modal" class="modal-backdrop" aria-hidden="true">
+      <div
+        class="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="param-help-title"
+      >
+        <div class="modal-head">
+          <h2 id="param-help-title">Guida parametri</h2>
+          <button id="close-help" class="modal-close" type="button">
+            Chiudi
+          </button>
+        </div>
+        <div class="modal-body">
+          <p class="help-note">
+            Ogni valore influenza numero punti, copertura e tempi macchina.
+          </p>
+          <div class="help-grid">
+            <article class="help-card">
+              <h3>Bitmap</h3>
+              <p>Immagine di partenza da convertire.</p>
+            </article>
+            <article class="help-card">
+              <h3>Max width (px)</h3>
+              <p>Ridimensiona la larghezza. 0 = nessun resize.</p>
+            </article>
+            <article class="help-card">
+              <h3>Soglia (0-255)</h3>
+              <p>Più alta = include piu pixel scuri; piu bassa = selezione piu stretta.</p>
+            </article>
+            <article class="help-card">
+              <h3>Sample colors</h3>
+              <p>Lista colori target (es. #000000,#FF0000). Vengono aggiunti alla selezione basata su soglia.</p>
+            </article>
+            <article class="help-card">
+              <h3>Sample tolerance</h3>
+              <p>Tolleranza RGB per il campionamento colore (0 = match esatto).</p>
+            </article>
+            <article class="help-card">
+              <h3>Escludi sfondo</h3>
+              <p>Rimuove dalla selezione i colori indicati come sfondo. Disattivalo se il bianco e' un filo da ricamare.</p>
+            </article>
+            <article class="help-card">
+              <h3>Background colors</h3>
+              <p>Lista colori da ignorare come sfondo, ad esempio #FFFFFF.</p>
+            </article>
+            <article class="help-card">
+              <h3>Background tolerance</h3>
+              <p>Tolleranza RGB per eliminare sfondi quasi bianchi o leggermente colorati.</p>
+            </article>
+            <article class="help-card">
+              <h3>Numero colori</h3>
+              <p>Quantizzazione colori dell'immagine (1-12).</p>
+            </article>
+            <article class="help-card">
+              <h3>Max points</h3>
+              <p>Tetto globale punti. 0 = nessun tetto.</p>
+            </article>
+            <article class="help-card">
+              <h3>Densita globale (%)</h3>
+              <p>Percentuale di punti da mantenere sul totale. 0 = disattivata.</p>
+            </article>
+            <article class="help-card">
+              <h3>Scala SVG</h3>
+              <p>Moltiplicatore coordinate SVG (dimensione finale).</p>
+            </article>
+            <article class="help-card">
+              <h3>Analysis square (mm)</h3>
+              <p>Regolarizza i punti su quadrati in mm (se attivo, minimo 1 mm).</p>
+            </article>
+            <article class="help-card">
+              <h3>Default DPI</h3>
+              <p>Usato per conversioni mm quando il file sorgente non ha metadati DPI.</p>
+            </article>
+            <article class="help-card">
+              <h3>Stroke width</h3>
+              <p>Spessore linea in SVG per preview/esportazione.</p>
+            </article>
+            <article class="help-card">
+              <h3>Min dist (mm)</h3>
+              <p>Distanza minima reale in millimetri tra punti consecutivi (filtra addensamenti).</p>
+            </article>
+            <article class="help-card">
+              <h3>Reinsertion rounds</h3>
+              <p>Tentativi di reinserimento punti filtrati dal min dist.</p>
+            </article>
+            <article class="help-card">
+              <h3>Path chunk size</h3>
+              <p>Divide il tracciato in blocchi per alleggerire file grandi.</p>
+            </article>
+            <article class="help-card">
+              <h3>Stile</h3>
+              <p>Carpet = regolare; Degrade = casuale.</p>
+            </article>
+            <article class="help-card">
+              <h3>Ordering</h3>
+              <p>Scanline = ordinato per righe; Nearest = percorso vicino-vicino.</p>
+            </article>
+            <article class="help-card">
+              <h3>Scanline band (px)</h3>
+              <p>Altezza banda in modalità scanline.</p>
+            </article>
+            <article class="help-card">
+              <h3>Serpentina</h3>
+              <p>Alterna direzione per banda (meno salti lunghi).</p>
+            </article>
+            <article class="help-card">
+              <h3>Grid cell (px)</h3>
+              <p>Solo Carpet: regolarizza la distribuzione su griglia.</p>
+            </article>
+            <article class="help-card">
+              <h3>Drop probability (0-1)</h3>
+              <p>Solo Degrade: probabilità di scartare un punto.</p>
+            </article>
+            <article class="help-card">
+              <h3>Jitter (px)</h3>
+              <p>Solo Degrade: spostamento casuale massimo per punto.</p>
+            </article>
+            <article class="help-card">
+              <h3>Seed (facoltativo)</h3>
+              <p>Solo Degrade: fisso per risultati ripetibili.</p>
+            </article>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="image-lightbox" class="image-lightbox" aria-hidden="true">
+      <button id="close-lightbox" type="button">Chiudi</button>
+      <img id="lightbox-image" alt="Preview ingrandita" />
+    </div>
+
+    <script>
+      (function () {
+        const styleSelect = document.getElementById("style");
+        const carpetControls = document.querySelectorAll(
+          '[data-group="carpet"]'
+        );
+        const degradeControls = document.querySelectorAll(
+          '[data-group="degrade"]'
+        );
+        const modal = document.getElementById("param-help-modal");
+        const openHelpBtn = document.getElementById("open-help");
+        const closeHelpBtn = document.getElementById("close-help");
+
+        function openModal() {
+          modal.classList.add("open");
+          modal.setAttribute("aria-hidden", "false");
+          closeHelpBtn.focus();
+        }
+
+        function closeModal() {
+          modal.classList.remove("open");
+          modal.setAttribute("aria-hidden", "true");
+          openHelpBtn.focus();
+        }
+
+        function refreshControls() {
+          const isCarpet = styleSelect.value === "carpet";
+          carpetControls.forEach(
+            (el) => (el.style.display = isCarpet ? "block" : "none")
+          );
+          degradeControls.forEach(
+            (el) => (el.style.display = isCarpet ? "none" : "block")
+          );
+        }
+
+        styleSelect.addEventListener("change", refreshControls);
+        openHelpBtn.addEventListener("click", openModal);
+        closeHelpBtn.addEventListener("click", closeModal);
+        modal.addEventListener("click", function (event) {
+          if (event.target === modal) {
+            closeModal();
+          }
+        });
+        document.addEventListener("keydown", function (event) {
+          if (event.key === "Escape" && modal.classList.contains("open")) {
+            closeModal();
+          }
+        });
+        refreshControls();
+      })();
+    </script>
+  </body>
+</html>
