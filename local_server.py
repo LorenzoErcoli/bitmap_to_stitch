@@ -80,7 +80,7 @@ def _json_response(handler, status, payload):
 
 
 class LocalAppHandler(BaseHTTPRequestHandler):
-    server_version = "BitmapToStitchLocal/0.1.1"
+    server_version = "BitmapToStitchLocal/0.1.3"
 
     def log_message(self, fmt, *args):
         log_event("%s - %s" % (self.address_string(), fmt % args))

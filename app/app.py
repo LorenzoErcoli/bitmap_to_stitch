@@ -129,6 +129,98 @@ def build_palette_from_selected_pixels(
     return np.asarray(palette, dtype=np.float32)
 
 
+def color_distance2(a, b):
+    diff = np.asarray(a, dtype=np.float32) - np.asarray(b, dtype=np.float32)
+    return float(np.sum(diff * diff))
+
+
+def weighted_color_average(colors, weights):
+    total = float(sum(weights))
+    if total <= 0:
+        return tuple(int(v) for v in colors[0])
+    acc = np.zeros(3, dtype=np.float64)
+    for color, weight in zip(colors, weights):
+        acc += np.asarray(color, dtype=np.float64) * float(weight)
+    return tuple(int(round(max(0, min(255, v)))) for v in (acc / total))
+
+
+def build_reduced_palette(rgb_arr, mask, target_count, priority_colors=None):
+    target_count = max(1, int(target_count))
+    priority = []
+    for color in priority_colors or []:
+        normalized = tuple(int(v) for v in color)
+        if normalized not in priority:
+            priority.append(normalized)
+
+    if len(priority) >= target_count:
+        selected_rgb = rgb_arr[mask].astype(np.float32)
+        ranked = []
+        for color in priority:
+            if len(selected_rgb):
+                diff = selected_rgb - np.asarray(color, dtype=np.float32)
+                distances = np.sum(diff * diff, axis=1)
+                score = float(np.min(distances))
+            else:
+                score = 0.0
+            ranked.append((score, color))
+        ranked.sort(key=lambda item: item[0])
+        return np.asarray([color for _, color in ranked[:target_count]], dtype=np.float32)
+
+    candidate_count = max(target_count * 6, target_count + 10, 12)
+    candidate_count = min(candidate_count, 64)
+    candidates = build_palette_from_selected_pixels(rgb_arr, mask, candidate_count)
+    candidate_colors = [tuple(int(v) for v in color) for color in candidates.astype(np.uint8)]
+
+    ys, xs = np.where(mask)
+    selected_rgb = rgb_arr[ys, xs].astype(np.float32)
+    weighted_candidates = []
+    if candidate_colors and len(selected_rgb):
+        palette = np.asarray(candidate_colors, dtype=np.float32)
+        labels = np.empty(len(selected_rgb), dtype=np.int32)
+        chunk_size = 250000
+        for start in range(0, len(selected_rgb), chunk_size):
+            end = min(start + chunk_size, len(selected_rgb))
+            chunk = selected_rgb[start:end]
+            diff = chunk[:, None, :] - palette[None, :, :]
+            distances = np.sum(diff * diff, axis=2)
+            labels[start:end] = np.argmin(distances, axis=1)
+        for idx, color in enumerate(candidate_colors):
+            weight = int(np.count_nonzero(labels == idx))
+            if weight > 0:
+                weighted_candidates.append({"color": color, "weight": weight, "protected": False})
+
+    if not weighted_candidates and not priority:
+        return build_palette_from_selected_pixels(rgb_arr, mask, target_count)
+
+    selected = [{"color": color, "weight": 1, "protected": True} for color in priority]
+    pool = [item for item in weighted_candidates if item["color"] not in priority]
+
+    if not selected and pool:
+        first = max(pool, key=lambda item: item["weight"])
+        selected.append(first)
+        pool.remove(first)
+
+    max_weight = max([item["weight"] for item in weighted_candidates] or [1])
+    while len(selected) < target_count and pool:
+        best_idx = None
+        best_score = None
+        for idx, item in enumerate(pool):
+            nearest_dist2 = min(
+                color_distance2(item["color"], chosen["color"]) for chosen in selected
+            ) if selected else 1.0
+            # Keep large areas relevant, but make hue diversity strong enough that
+            # small distinct colors like yellow/green survive large blue regions.
+            weight_factor = 0.25 + 0.75 * math.sqrt(item["weight"] / float(max_weight))
+            score = nearest_dist2 * weight_factor
+            if best_score is None or score > best_score:
+                best_score = score
+                best_idx = idx
+
+        selected.append(pool.pop(best_idx))
+
+    return np.asarray([item["color"] for item in selected[:target_count]], dtype=np.float32)
+
+
 def group_mask_points_by_palette(rgb_arr, mask, color_count):
     palette = build_palette_from_selected_pixels(rgb_arr, mask, color_count)
     return group_mask_points_with_palette(rgb_arr, mask, palette)
@@ -138,54 +230,13 @@ def group_points_with_priority_colors(
     rgb_arr, mask, color_count, priority_colors=None, priority_tolerance=0.0
 ):
     target_count = max(1, int(color_count))
-    if priority_colors:
-        color_points = {}
-        priority_matches = []
-        for color in priority_colors:
-            color_mask = mask & build_color_match_mask(
-                rgb_arr, [color], priority_tolerance
-            )
-            if not np.any(color_mask):
-                continue
-            color_hex = f"#{color[0]:02X}{color[1]:02X}{color[2]:02X}"
-            ys, xs = np.where(color_mask)
-            priority_matches.append(
-                {
-                    "color_hex": color_hex,
-                    "points": list(zip(xs.tolist(), ys.tolist())),
-                    "count": int(len(xs)),
-                    "mask": color_mask,
-                }
-            )
-
-        priority_matches.sort(key=lambda item: item["count"], reverse=True)
-        selected_priority = priority_matches[:target_count]
-        remaining_mask = mask.copy()
-
-        for item in selected_priority:
-            color_points.setdefault(item["color_hex"], []).extend(item["points"])
-            remaining_mask &= ~item["mask"]
-
-        remaining_slots = target_count - len(color_points)
-        if remaining_slots > 0 and np.any(remaining_mask):
-            palette_groups = group_mask_points_by_palette(
-                rgb_arr, remaining_mask, remaining_slots
-            )
-            for color_hex, points in palette_groups.items():
-                if len(color_points) >= target_count:
-                    break
-                color_points.setdefault(color_hex, []).extend(points)
-
-        return color_points
-
-    color_points = {}
-    remaining_mask = mask.copy()
-
-    palette_groups = group_mask_points_by_palette(rgb_arr, remaining_mask, target_count)
-    for color_hex, points in palette_groups.items():
-        color_points.setdefault(color_hex, []).extend(points)
-
-    return color_points
+    palette = build_reduced_palette(
+        rgb_arr,
+        mask,
+        target_count,
+        priority_colors=priority_colors,
+    )
+    return group_mask_points_with_palette(rgb_arr, mask, palette)
 
 
 def group_mask_points_with_palette(rgb_arr, mask, palette):
@@ -884,6 +935,13 @@ def process_color_points(
     elif isinstance(effective_dpi, (int, float)) and effective_dpi > 0:
         dpi_for_mm = float(effective_dpi)
 
+    min_dist_px = 0.0
+    if opts["min_dist"] > 0:
+        if opts["scale"] > 0:
+            min_dist_px = opts["min_dist"] * (dpi_for_mm / 25.4) / float(opts["scale"])
+        else:
+            min_dist_px = opts["min_dist"] * (dpi_for_mm / 25.4)
+
     if analysis_cell_mm >= 1.0 and opts["scale"] > 0:
         cell_px = analysis_cell_mm * (dpi_for_mm / 25.4) / float(opts["scale"])
         if cell_px > 1.0:
@@ -942,10 +1000,6 @@ def process_color_points(
     final_path = ordered
     discarded = []
     if opts["min_dist"] > 0:
-        if opts["scale"] > 0:
-            min_dist_px = opts["min_dist"] * (dpi_for_mm / 25.4) / float(opts["scale"])
-        else:
-            min_dist_px = opts["min_dist"] * (dpi_for_mm / 25.4)
         path_filtered, standby = filter_with_min_dist_and_standby(
             ordered, min_dist_px
         )
