@@ -1,0 +1,48 @@
+name: Build Windows App
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pyinstaller numpy pillow
+
+      - name: Build executable
+        run: python -m PyInstaller --clean --noconfirm bitmap_to_stitch_local.spec
+
+      - name: Package zip
+        shell: pwsh
+        run: |
+          Compress-Archive -Path dist\BitmapToStitch\* -DestinationPath BitmapToStitch-Windows.zip -Force
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BitmapToStitch-Windows
+          path: BitmapToStitch-Windows.zip
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: BitmapToStitch-Windows.zip

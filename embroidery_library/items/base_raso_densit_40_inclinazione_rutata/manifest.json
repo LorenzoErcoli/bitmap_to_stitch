@@ -1,0 +1,27 @@
+{
+  "id": "base_raso_densit_40_inclinazione_rutata",
+  "stitch_count": 476,
+  "color_layers": 1,
+  "classification_summary": {
+    "tatami": 1
+  },
+  "paths": {
+    "dst": "items/base_raso_densit_40_inclinazione_rutata/source.dst",
+    "stitch_ir": "items/base_raso_densit_40_inclinazione_rutata/stitch_ir.json",
+    "stats": "items/base_raso_densit_40_inclinazione_rutata/stats.json",
+    "recipe": "items/base_raso_densit_40_inclinazione_rutata/recipe.yaml",
+    "preview": "items/base_raso_densit_40_inclinazione_rutata/preview.png"
+  },
+  "generated_at": "2025-12-18T22:24:12+00:00",
+  "bounds_mm": {
+    "minx": -15.0,
+    "miny": -15.4,
+    "maxx": 0.2,
+    "maxy": 0.0
+  },
+  "description": "BASE RASO DENSIT\u00e0 40 INCLINAZIONE RUTATA",
+  "density_range_pts_per_mm2": {
+    "min": 2.034970715232354,
+    "max": 2.034970715232354
+  }
+}

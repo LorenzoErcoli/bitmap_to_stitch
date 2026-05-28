@@ -1,0 +1,29 @@
+{
+  "id": "damsco_floreale_punto_mattezzo_con_base_per_appiattimento_filo_effetto_vintage",
+  "stitch_count": 50978,
+  "color_layers": 3,
+  "classification_summary": {
+    "tatami": 2,
+    "unknown": 1
+  },
+  "paths": {
+    "dst": "items/damsco_floreale_punto_mattezzo_con_base_per_appiattimento_filo_effetto_vintage/source.dst",
+    "stitch_ir": "items/damsco_floreale_punto_mattezzo_con_base_per_appiattimento_filo_effetto_vintage/stitch_ir.json",
+    "stats": "items/damsco_floreale_punto_mattezzo_con_base_per_appiattimento_filo_effetto_vintage/stats.json",
+    "recipe": "items/damsco_floreale_punto_mattezzo_con_base_per_appiattimento_filo_effetto_vintage/recipe.yaml",
+    "artwork": "items/damsco_floreale_punto_mattezzo_con_base_per_appiattimento_filo_effetto_vintage/artwork.jpg",
+    "preview": "items/damsco_floreale_punto_mattezzo_con_base_per_appiattimento_filo_effetto_vintage/preview.png"
+  },
+  "generated_at": "2025-12-18T22:24:16+00:00",
+  "bounds_mm": {
+    "minx": 0.0,
+    "miny": 0.0,
+    "maxx": 162.20000000000002,
+    "maxy": 124.5
+  },
+  "description": "DAMSCO FLOREALE - PUNTO MATTEZZO CON BASE PER APPIATTIMENTO FILO -  EFFETTO VINTAGE",
+  "density_range_pts_per_mm2": {
+    "min": 0.4055143108946401,
+    "max": 1.322954978174197
+  }
+}

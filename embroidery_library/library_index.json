@@ -1,0 +1,167 @@
+{
+  "items": {
+    "base_punto_canvas_2_pass": {
+      "label": "BASE PUNTO CANVAS 2 PASS",
+      "paths": {
+        "dst": "items/base_punto_canvas_2_pass/source.dst",
+        "stitch_ir": "items/base_punto_canvas_2_pass/stitch_ir.json",
+        "stats": "items/base_punto_canvas_2_pass/stats.json",
+        "recipe": "items/base_punto_canvas_2_pass/recipe.yaml",
+        "preview": "items/base_punto_canvas_2_pass/preview.png"
+      },
+      "stitch_count": 665166,
+      "classification_summary": {
+        "tatami": 1
+      },
+      "updated_at": "2025-12-18T22:24:11+00:00",
+      "description": "BASE PUNTO CANVAS 2 PASS",
+      "density_range_pts_per_mm2": {
+        "min": 0.8467273815997702,
+        "max": 0.8467273815997702
+      }
+    },
+    "base_raso_densit_30_orizzontale": {
+      "label": "BASE RASO DENSIT\u00e0 30 ORIZZONTALE",
+      "paths": {
+        "dst": "items/base_raso_densit_30_orizzontale/source.dst",
+        "stitch_ir": "items/base_raso_densit_30_orizzontale/stitch_ir.json",
+        "stats": "items/base_raso_densit_30_orizzontale/stats.json",
+        "recipe": "items/base_raso_densit_30_orizzontale/recipe.yaml",
+        "preview": "items/base_raso_densit_30_orizzontale/preview.png"
+      },
+      "stitch_count": 273,
+      "classification_summary": {
+        "satin_dense": 1
+      },
+      "updated_at": "2025-12-18T22:24:11+00:00",
+      "description": "BASE RASO DENSIT\u00e0 30 ORIZZONTALE",
+      "density_range_pts_per_mm2": {
+        "min": 1.182355616189177,
+        "max": 1.182355616189177
+      }
+    },
+    "base_raso_densit_30_verticale": {
+      "label": "BASE RASO DENSIT\u00e0 30 VERTICALE",
+      "paths": {
+        "dst": "items/base_raso_densit_30_verticale/source.dst",
+        "stitch_ir": "items/base_raso_densit_30_verticale/stitch_ir.json",
+        "stats": "items/base_raso_densit_30_verticale/stats.json",
+        "recipe": "items/base_raso_densit_30_verticale/recipe.yaml",
+        "preview": "items/base_raso_densit_30_verticale/preview.png"
+      },
+      "stitch_count": 272,
+      "classification_summary": {
+        "satin_dense": 1
+      },
+      "updated_at": "2025-12-18T22:24:12+00:00",
+      "description": "BASE RASO DENSIT\u00e0 30 VERTICALE",
+      "density_range_pts_per_mm2": {
+        "min": 1.178407417034919,
+        "max": 1.178407417034919
+      }
+    },
+    "base_raso_densit_40_orizzontale": {
+      "label": "BASE RASO DENSIT\u00e0 40 ORIZZONTALE",
+      "paths": {
+        "dst": "items/base_raso_densit_40_orizzontale/source.dst",
+        "stitch_ir": "items/base_raso_densit_40_orizzontale/stitch_ir.json",
+        "stats": "items/base_raso_densit_40_orizzontale/stats.json",
+        "recipe": "items/base_raso_densit_40_orizzontale/recipe.yaml",
+        "preview": "items/base_raso_densit_40_orizzontale/preview.png"
+      },
+      "stitch_count": 353,
+      "classification_summary": {
+        "unknown": 1
+      },
+      "updated_at": "2025-12-18T22:24:13+00:00",
+      "description": "BASE RASO DENSIT\u00e0 40 ORIZZONTALE",
+      "density_range_pts_per_mm2": {
+        "min": 1.5288334524350897,
+        "max": 1.5288334524350897
+      }
+    },
+    "base_raso_densit_40_verticale": {
+      "label": "BASE RASO DENSIT\u00e0 40 VERTICALE",
+      "paths": {
+        "dst": "items/base_raso_densit_40_verticale/source.dst",
+        "stitch_ir": "items/base_raso_densit_40_verticale/stitch_ir.json",
+        "stats": "items/base_raso_densit_40_verticale/stats.json",
+        "recipe": "items/base_raso_densit_40_verticale/recipe.yaml",
+        "preview": "items/base_raso_densit_40_verticale/preview.png"
+      },
+      "stitch_count": 352,
+      "classification_summary": {
+        "unknown": 1
+      },
+      "updated_at": "2025-12-18T22:24:13+00:00",
+      "description": "BASE RASO DENSIT\u00e0 40 VERTICALE",
+      "density_range_pts_per_mm2": {
+        "min": 1.5273800225635685,
+        "max": 1.5273800225635685
+      }
+    },
+    "floreale_base_punto_mattezzi_effetto_vintage_su_velluto": {
+      "label": "FLOREALE BASE + PUNTO MATTEZZI EFFETTO VINTAGE - SU VELLUTO",
+      "paths": {
+        "dst": "items/floreale_base_punto_mattezzi_effetto_vintage_su_velluto/source.dst",
+        "stitch_ir": "items/floreale_base_punto_mattezzi_effetto_vintage_su_velluto/stitch_ir.json",
+        "stats": "items/floreale_base_punto_mattezzi_effetto_vintage_su_velluto/stats.json",
+        "recipe": "items/floreale_base_punto_mattezzi_effetto_vintage_su_velluto/recipe.yaml",
+        "preview": "items/floreale_base_punto_mattezzi_effetto_vintage_su_velluto/preview.png"
+      },
+      "stitch_count": 50978,
+      "classification_summary": {
+        "tatami": 2,
+        "unknown": 1
+      },
+      "updated_at": "2025-12-18T22:24:20+00:00",
+      "description": "FLOREALE BASE + PUNTO MATTEZZI EFFETTO VINTAGE - SU VELLUTO",
+      "density_range_pts_per_mm2": {
+        "min": 0.4055143108946401,
+        "max": 1.322954978174197
+      }
+    },
+    "base_raso_densit_40_inclinazione_rutata": {
+      "label": "BASE RASO DENSIT\u00e0 40 INCLINAZIONE RUTATA",
+      "paths": {
+        "dst": "items/base_raso_densit_40_inclinazione_rutata/source.dst",
+        "stitch_ir": "items/base_raso_densit_40_inclinazione_rutata/stitch_ir.json",
+        "stats": "items/base_raso_densit_40_inclinazione_rutata/stats.json",
+        "recipe": "items/base_raso_densit_40_inclinazione_rutata/recipe.yaml",
+        "preview": "items/base_raso_densit_40_inclinazione_rutata/preview.png"
+      },
+      "stitch_count": 476,
+      "classification_summary": {
+        "tatami": 1
+      },
+      "updated_at": "2025-12-18T22:24:12+00:00",
+      "description": "BASE RASO DENSIT\u00e0 40 INCLINAZIONE RUTATA",
+      "density_range_pts_per_mm2": {
+        "min": 2.034970715232354,
+        "max": 2.034970715232354
+      }
+    },
+    "damsco_floreale_punto_mattezzo_con_base_per_appiattimento_filo_effetto_vintage": {
+      "label": "DAMSCO FLOREALE - PUNTO MATTEZZO CON BASE PER APPIATTIMENTO FILO -  EFFETTO VINTAGE",
+      "paths": {
+        "dst": "items/damsco_floreale_punto_mattezzo_con_base_per_appiattimento_filo_effetto_vintage/source.dst",
+        "stitch_ir": "items/damsco_floreale_punto_mattezzo_con_base_per_appiattimento_filo_effetto_vintage/stitch_ir.json",
+        "stats": "items/damsco_floreale_punto_mattezzo_con_base_per_appiattimento_filo_effetto_vintage/stats.json",
+        "recipe": "items/damsco_floreale_punto_mattezzo_con_base_per_appiattimento_filo_effetto_vintage/recipe.yaml",
+        "artwork": "items/damsco_floreale_punto_mattezzo_con_base_per_appiattimento_filo_effetto_vintage/artwork.jpg",
+        "preview": "items/damsco_floreale_punto_mattezzo_con_base_per_appiattimento_filo_effetto_vintage/preview.png"
+      },
+      "stitch_count": 50978,
+      "classification_summary": {
+        "tatami": 2,
+        "unknown": 1
+      },
+      "updated_at": "2025-12-18T22:24:16+00:00",
+      "description": "DAMSCO FLOREALE - PUNTO MATTEZZO CON BASE PER APPIATTIMENTO FILO -  EFFETTO VINTAGE",
+      "density_range_pts_per_mm2": {
+        "min": 0.4055143108946401,
+        "max": 1.322954978174197
+      }
+    }
+  }
+}

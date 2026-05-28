@@ -1,0 +1,65 @@
+id: base_raso_densit_40_orizzontale
+source: items/base_raso_densit_40_orizzontale/source.dst
+tags:
+  material: []
+  object: []
+  source: dst_import
+stitch_profile:
+  avg_stitch_length_mm: 2.6914261557708454
+  max_stitch_length_mm: 3.605551275463989
+  directionality_histogram_deg:
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
+  - 181
+  - 0
+  - 0
+  - 0
+  - 0
+  - 169
+  layers:
+  - color: 0
+    stitch_count: 353
+    path_length_mm: 941.9991545197959
+    avg_stitch_length_mm: 2.6914261557708454
+    std_stitch_length_mm: 0.6683430188830531
+    hull_area_mm2: 230.89499999999998
+    bounds:
+      minx: -15.4
+      miny: -15.0
+      maxx: 0.0
+      maxy: 0.0
+    density_stitches_per_mm2: 1.5288334524350897
+    coverage_ratio: 0.9995454545454545
+    angle_histogram_deg:
+    - 0
+    - 0
+    - 0
+    - 0
+    - 0
+    - 0
+    - 181
+    - 0
+    - 0
+    - 0
+    - 0
+    - 169
+    classification:
+      type: unknown
+      confidence: 0.3
+      reason: Metrics outside heuristics (density 1.53, avg 2.69 mm, bins 2, alignment
+        0.52).
+    summary: Layer 0 [unknown] 353 sts, avg 2.69 mm, 1.53 pts/mm^2, coverage 1.00
+  layer_classification_summary:
+    unknown: 1
+notes:
+- Derived automatically from DST data.
+- Parameters estimated via pyembroidery + numpy pipeline.
+examples:
+- items/base_raso_densit_40_orizzontale/preview.png
+- items/base_raso_densit_40_orizzontale/stitch_ir.json
+label: "BASE RASO DENSIT\xE0 40 ORIZZONTALE"
+description: "BASE RASO DENSIT\xE0 40 ORIZZONTALE"

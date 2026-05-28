@@ -1,0 +1,27 @@
+{
+  "id": "base_raso_densit_30_orizzontale",
+  "stitch_count": 273,
+  "color_layers": 1,
+  "classification_summary": {
+    "satin_dense": 1
+  },
+  "paths": {
+    "dst": "items/base_raso_densit_30_orizzontale/source.dst",
+    "stitch_ir": "items/base_raso_densit_30_orizzontale/stitch_ir.json",
+    "stats": "items/base_raso_densit_30_orizzontale/stats.json",
+    "recipe": "items/base_raso_densit_30_orizzontale/recipe.yaml",
+    "preview": "items/base_raso_densit_30_orizzontale/preview.png"
+  },
+  "generated_at": "2025-12-18T22:24:11+00:00",
+  "bounds_mm": {
+    "minx": -15.4,
+    "miny": -15.0,
+    "maxx": 0.0,
+    "maxy": 0.0
+  },
+  "description": "BASE RASO DENSIT\u00e0 30 ORIZZONTALE",
+  "density_range_pts_per_mm2": {
+    "min": 1.182355616189177,
+    "max": 1.182355616189177
+  }
+}

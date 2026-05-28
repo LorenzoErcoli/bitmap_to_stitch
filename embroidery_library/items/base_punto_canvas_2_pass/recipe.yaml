@@ -1,0 +1,65 @@
+id: base_punto_canvas_2_pass
+source: items/base_punto_canvas_2_pass/source.dst
+tags:
+  material: []
+  object: []
+  source: dst_import
+stitch_profile:
+  avg_stitch_length_mm: 2.521149149949104
+  max_stitch_length_mm: 6.400000000000091
+  directionality_histogram_deg:
+  - 0
+  - 0
+  - 147278
+  - 148332
+  - 0
+  - 211
+  - 147700
+  - 0
+  - 0
+  - 73850
+  - 0
+  - 147700
+  layers:
+  - color: 0
+    stitch_count: 665166
+    path_length_mm: 1676743.1863011091
+    avg_stitch_length_mm: 2.521149149949104
+    std_stitch_length_mm: 1.413303735699892
+    hull_area_mm2: 785572.8
+    bounds:
+      minx: -350.3
+      miny: -560.6
+      maxx: 350.3
+      maxy: 560.7
+    density_stitches_per_mm2: 0.8467273815997702
+    coverage_ratio: 0.9999872960555474
+    angle_histogram_deg:
+    - 0
+    - 0
+    - 147278
+    - 148332
+    - 0
+    - 211
+    - 147700
+    - 0
+    - 0
+    - 73850
+    - 0
+    - 147700
+    classification:
+      type: tatami
+      confidence: 0.75
+      reason: 'Fill pattern: density 0.85, multi-directional (5 bins) with shorter
+        stitches (2.52 mm).'
+    summary: Layer 0 [tatami] 665166 sts, avg 2.52 mm, 0.85 pts/mm^2, coverage 1.00
+  layer_classification_summary:
+    tatami: 1
+notes:
+- Derived automatically from DST data.
+- Parameters estimated via pyembroidery + numpy pipeline.
+examples:
+- items/base_punto_canvas_2_pass/preview.png
+- items/base_punto_canvas_2_pass/stitch_ir.json
+label: BASE PUNTO CANVAS 2 PASS
+description: BASE PUNTO CANVAS 2 PASS

@@ -1,0 +1,28 @@
+{
+  "id": "floreale_base_punto_mattezzi_effetto_vintage_su_velluto",
+  "stitch_count": 50978,
+  "color_layers": 3,
+  "classification_summary": {
+    "tatami": 2,
+    "unknown": 1
+  },
+  "paths": {
+    "dst": "items/floreale_base_punto_mattezzi_effetto_vintage_su_velluto/source.dst",
+    "stitch_ir": "items/floreale_base_punto_mattezzi_effetto_vintage_su_velluto/stitch_ir.json",
+    "stats": "items/floreale_base_punto_mattezzi_effetto_vintage_su_velluto/stats.json",
+    "recipe": "items/floreale_base_punto_mattezzi_effetto_vintage_su_velluto/recipe.yaml",
+    "preview": "items/floreale_base_punto_mattezzi_effetto_vintage_su_velluto/preview.png"
+  },
+  "generated_at": "2025-12-18T22:24:20+00:00",
+  "bounds_mm": {
+    "minx": 0.0,
+    "miny": 0.0,
+    "maxx": 162.20000000000002,
+    "maxy": 124.5
+  },
+  "description": "FLOREALE BASE + PUNTO MATTEZZI EFFETTO VINTAGE - SU VELLUTO",
+  "density_range_pts_per_mm2": {
+    "min": 0.4055143108946401,
+    "max": 1.322954978174197
+  }
+}

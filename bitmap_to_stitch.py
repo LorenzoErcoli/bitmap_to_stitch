@@ -9,11 +9,76 @@ import numpy as np
 from PIL import Image
 
 
+def parse_hex_color(color_text):
+    s = str(color_text).strip()
+    if s.startswith("#"):
+        s = s[1:]
+    if len(s) != 6:
+        raise ValueError(f"Colore non valido: {color_text}")
+    try:
+        r = int(s[0:2], 16)
+        g = int(s[2:4], 16)
+        b = int(s[4:6], 16)
+    except ValueError as exc:
+        raise ValueError(f"Colore non valido: {color_text}") from exc
+    return (r, g, b)
+
+
+def build_color_match_mask(rgb_arr, target_colors, tolerance):
+    tol = max(0.0, float(tolerance))
+    tol2 = tol * tol
+    h, w, _ = rgb_arr.shape
+    mask = np.zeros((h, w), dtype=bool)
+    for (tr, tg, tb) in target_colors:
+        dr = rgb_arr[:, :, 0].astype(np.float32) - float(tr)
+        dg = rgb_arr[:, :, 1].astype(np.float32) - float(tg)
+        db = rgb_arr[:, :, 2].astype(np.float32) - float(tb)
+        d2 = dr * dr + dg * dg + db * db
+        mask |= d2 <= tol2
+    return mask
+
+
+def extract_source_dpi(image_info):
+    """
+    Estrae DPI da metadati comuni (dpi o JFIF).
+    Ritorna (dpi_x, dpi_y) oppure None.
+    """
+    dpi = image_info.get("dpi")
+    if isinstance(dpi, (tuple, list)) and len(dpi) >= 2:
+        dx = float(dpi[0])
+        dy = float(dpi[1])
+        if dx > 0 and dy > 0:
+            return (dx, dy)
+    elif isinstance(dpi, (int, float)):
+        d = float(dpi)
+        if d > 0:
+            return (d, d)
+
+    jfif_unit = image_info.get("jfif_unit")
+    jfif_density = image_info.get("jfif_density")
+    if (
+        isinstance(jfif_density, (tuple, list))
+        and len(jfif_density) >= 2
+        and jfif_density[0] > 0
+        and jfif_density[1] > 0
+    ):
+        x = float(jfif_density[0])
+        y = float(jfif_density[1])
+        if jfif_unit == 1:  # dots per inch
+            return (x, y)
+        if jfif_unit == 2:  # dots per cm
+            return (x * 2.54, y * 2.54)
+
+    return None
+
+
 # ------------------------------------------------------------
 # 1. Lettura immagine e punti (pixel neri)
 # ------------------------------------------------------------
 
-def load_points_from_image(path, max_width=None, threshold=200):
+def load_points_from_image(
+    path, max_width=None, threshold=200, sample_colors=None, sample_tolerance=0.0
+):
     """
     Carica l'immagine, la converte in scala di grigi (0-255),
     opzionalmente ridimensiona la larghezza a max_width (mantenendo le proporzioni),
@@ -21,20 +86,40 @@ def load_points_from_image(path, max_width=None, threshold=200):
       - lista di punti (x, y) per i pixel più scuri della soglia
       - size = (width_px, height_px)
     """
-    img = Image.open(path).convert("L")  # grayscale
+    original = Image.open(path)
+    source_dpi = extract_source_dpi(original.info)
+    img = original.convert("RGBA")
+    resize_scale = 1.0
 
     if max_width is not None and max_width > 0:
         w, h = img.size
         if w > max_width:
             scale = max_width / float(w)
+            resize_scale = scale
             new_w = max_width
             new_h = int(h * scale)
             img = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
 
-    arr = np.array(img)
-    ys, xs = np.where(arr < threshold)  # pixel scuri (neri)
+    effective_dpi = source_dpi
+    if effective_dpi is not None and resize_scale != 1.0:
+        effective_dpi = (
+            float(effective_dpi[0]) * resize_scale,
+            float(effective_dpi[1]) * resize_scale,
+        )
+
+    rgb = np.array(img.convert("RGB"))
+    luminance = np.array(img.convert("L"))
+    mask = luminance < int(threshold)
+    if sample_colors:
+        # I colori campionati si aggiungono alla selezione base, non la sostituiscono.
+        mask |= build_color_match_mask(rgb, sample_colors, sample_tolerance)
+    if "A" in img.getbands():
+        alpha = np.array(img.getchannel("A"))
+        mask &= alpha > 0
+
+    ys, xs = np.where(mask)  # pixel selezionati
     points = list(zip(xs.tolist(), ys.tolist()))
-    return points, img.size  # (width_px, height_px)
+    return points, img.size, effective_dpi  # (width_px, height_px), dpi
 
 
 # ------------------------------------------------------------
@@ -369,7 +454,14 @@ def try_reinsert_points(path, standby, min_dist_px):
 # 7. Costruzione SVG: UNA sola path
 # ------------------------------------------------------------
 
-def build_svg_single_path(points, scale=1.0, stroke_width=0.3, chunk_size=0):
+def build_svg_single_path(
+    points,
+    image_size=None,
+    scale=1.0,
+    stroke_width=0.3,
+    chunk_size=0,
+    source_dpi=None,
+):
     """
     Crea una stringa SVG con una o più <path>:
       M x0 y0 L x1 y1 L x2 y2 ...
@@ -380,10 +472,14 @@ def build_svg_single_path(points, scale=1.0, stroke_width=0.3, chunk_size=0):
 
     scaled = [(x * scale, y * scale) for (x, y) in points]
 
-    max_x = max(p[0] for p in scaled)
-    max_y = max(p[1] for p in scaled)
-    width = max_x + 10
-    height = max_y + 10
+    if image_size is not None:
+        width = max(1.0, float(image_size[0]) * scale)
+        height = max(1.0, float(image_size[1]) * scale)
+    else:
+        max_x = max(p[0] for p in scaled)
+        max_y = max(p[1] for p in scaled)
+        width = max(1.0, max_x + 1.0)
+        height = max(1.0, max_y + 1.0)
 
     def chunk_iter(data, size):
         if size <= 0 or len(data) <= size:
@@ -419,9 +515,27 @@ def build_svg_single_path(points, scale=1.0, stroke_width=0.3, chunk_size=0):
             f'  <path d="{d_attr}" fill="none" stroke="black" stroke-width="{stroke_width}"/>'
         )
 
+    width_attr = f'{width:.2f}px'
+    height_attr = f'{height:.2f}px'
+    dpi_x = None
+    dpi_y = None
+    if isinstance(source_dpi, (tuple, list)) and len(source_dpi) >= 2:
+        dpi_x = float(source_dpi[0])
+        dpi_y = float(source_dpi[1])
+    elif isinstance(source_dpi, (int, float)) and source_dpi > 0:
+        dpi_x = float(source_dpi)
+        dpi_y = float(source_dpi)
+
+    if dpi_x and dpi_y and dpi_x > 0 and dpi_y > 0:
+        mm_per_inch = 25.4
+        width_mm = (width / dpi_x) * mm_per_inch
+        height_mm = (height / dpi_y) * mm_per_inch
+        width_attr = f"{width_mm:.2f}mm"
+        height_attr = f"{height_mm:.2f}mm"
+
     svg = f"""<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg"
-     width="{width:.2f}" height="{height:.2f}"
+     width="{width_attr}" height="{height_attr}"
      viewBox="0 0 {width:.2f} {height:.2f}">
 {chr(10).join(path_elems)}
 </svg>
@@ -451,6 +565,24 @@ def main():
         type=int,
         default=200,
         help="Soglia di luminosità (0–255) per considerare un pixel come 'nero' (default: 200).",
+    )
+    parser.add_argument(
+        "--sample-color",
+        action="append",
+        default=[],
+        help="Colore da campionare (es. #000000). Ripetibile per più colori.",
+    )
+    parser.add_argument(
+        "--sample-tolerance",
+        type=float,
+        default=0.0,
+        help="Tolleranza colore (distanza RGB euclidea). Usata con --sample-color.",
+    )
+    parser.add_argument(
+        "--default-dpi",
+        type=float,
+        default=96.0,
+        help="DPI usato per conversioni mm→px quando il file sorgente non contiene DPI.",
     )
 
     parser.add_argument(
@@ -530,7 +662,7 @@ def main():
         "--min-dist",
         type=float,
         default=1.0,
-        help="Distanza minima RIGIDA tra punti consecutivi (in unità SVG, es. mm).",
+        help="Distanza minima RIGIDA tra punti consecutivi (in mm reali).",
     )
     parser.add_argument(
         "--reinsertion-rounds",
@@ -541,17 +673,35 @@ def main():
 
     args = parser.parse_args()
 
+    sample_colors = []
+    for color_text in args.sample_color:
+        sample_colors.append(parse_hex_color(color_text))
+
     input_path = Path(args.input)
     output_path = Path(args.output)
 
     # 1) Lettura immagine e punti
     print(f"Carico immagine: {input_path}")
-    points, size = load_points_from_image(
+    points, size, source_dpi = load_points_from_image(
         input_path,
         max_width=args.max_width if args.max_width > 0 else None,
         threshold=args.threshold,
+        sample_colors=sample_colors if sample_colors else None,
+        sample_tolerance=args.sample_tolerance,
     )
     print(f"Dimensione immagine (dopo eventuale resize): {size[0]}x{size[1]} px")
+    if source_dpi is not None:
+        print(f"DPI sorgente rilevato: {source_dpi}")
+    else:
+        print(
+            f"DPI sorgente non presente: uso default-dpi={args.default_dpi:.2f} per conversioni mm."
+        )
+    if sample_colors:
+        printable = [f"#{r:02X}{g:02X}{b:02X}" for (r, g, b) in sample_colors]
+        print(
+            "Campionamento colore attivo: "
+            f"{', '.join(printable)} con tolleranza {args.sample_tolerance:.2f}"
+        )
     print(f"Punti trovati (pixel neri): {len(points)}")
 
     if not points:
@@ -603,9 +753,22 @@ def main():
     print(f"Segmento massimo iniziale: {max_segment_length(ordered):.2f} px")
 
     # 4) Applicazione min-dist con standby + reinserimento
-    if args.min_dist > 0 and args.scale > 0:
-        min_dist_px = args.min_dist / args.scale
-        print(f"Applico min-dist rigido: {args.min_dist} (unità SVG) ≈ {min_dist_px:.2f} px")
+    if args.min_dist > 0:
+        if source_dpi is not None:
+            dpi_x = float(source_dpi[0]) if isinstance(source_dpi, (tuple, list)) else float(source_dpi)
+            dpi_y = float(source_dpi[1]) if isinstance(source_dpi, (tuple, list)) else float(source_dpi)
+        else:
+            dpi_x = float(args.default_dpi)
+            dpi_y = float(args.default_dpi)
+        dpi_avg = (dpi_x + dpi_y) / 2.0
+        if args.scale > 0:
+            min_dist_px = args.min_dist * (dpi_avg / 25.4) / args.scale
+        else:
+            min_dist_px = args.min_dist * (dpi_avg / 25.4)
+        print(
+            f"Applico min-dist rigido: {args.min_dist:.2f} mm -> {min_dist_px:.2f} px "
+            f"(dpi medio={dpi_avg:.2f}, scale={args.scale:.4f})"
+        )
 
         # Primo passaggio: filtro + standby
         path_filtered, standby = filter_with_min_dist_and_standby(ordered, min_dist_px)
@@ -630,16 +793,18 @@ def main():
         print(f"Punti finali nel percorso: {len(final_path)}")
         print(f"Punti scartati definitivamente: {len(discarded)}")
     else:
-        print("min-dist <= 0 o scale <= 0: nessun vincolo di distanza minima.")
+        print("min-dist <= 0: nessun vincolo di distanza minima.")
         final_path = ordered
 
     # 5) Costruzione SVG (una sola path)
     print("Costruisco lo SVG (una sola path)...")
     svg_str = build_svg_single_path(
         final_path,
+        image_size=size,
         scale=args.scale,
         stroke_width=args.stroke_width,
         chunk_size=args.path_chunk_size,
+        source_dpi=source_dpi,
     )
 
     output_path.write_text(svg_str, encoding="utf-8")

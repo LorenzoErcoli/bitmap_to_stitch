@@ -1,0 +1,134 @@
+id: damsco_floreale_punto_mattezzo_con_base_per_appiattimento_filo_effetto_vintage
+source: items/damsco_floreale_punto_mattezzo_con_base_per_appiattimento_filo_effetto_vintage/source.dst
+tags:
+  material: []
+  object: []
+  source: dst_import
+stitch_profile:
+  avg_stitch_length_mm: 1.988001935266147
+  max_stitch_length_mm: 12.753430910935304
+  directionality_histogram_deg:
+  - 3902
+  - 4202
+  - 3893
+  - 4703
+  - 4106
+  - 3918
+  - 4543
+  - 4201
+  - 3985
+  - 4756
+  - 4172
+  - 4502
+  layers:
+  - color: 1
+    stitch_count: 16713
+    path_length_mm: 32078.021933656455
+    avg_stitch_length_mm: 1.922796974983886
+    std_stitch_length_mm: 0.6920107560155686
+    hull_area_mm2: 19890.855
+    bounds:
+      minx: 0.0
+      miny: 0.0
+      maxx: 162.20000000000002
+      maxy: 124.5
+    density_stitches_per_mm2: 0.8402353744974763
+    coverage_ratio: 0.9849932405330322
+    angle_histogram_deg:
+    - 1310
+    - 1376
+    - 1276
+    - 1483
+    - 1284
+    - 1379
+    - 1552
+    - 1385
+    - 1245
+    - 1442
+    - 1397
+    - 1554
+    classification:
+      type: tatami
+      confidence: 0.75
+      reason: 'Fill pattern: density 0.84, multi-directional (12 bins) with shorter
+        stitches (1.92 mm).'
+    summary: Layer 1 [tatami] 16713 sts, avg 1.92 mm, 0.84 pts/mm^2, coverage 0.98
+  - color: 2
+    stitch_count: 26199
+    path_length_mm: 55011.4009357926
+    avg_stitch_length_mm: 2.101998430927025
+    std_stitch_length_mm: 0.9370160027098571
+    hull_area_mm2: 19803.395
+    bounds:
+      minx: 0.0
+      miny: 0.1
+      maxx: 162.3
+      maxy: 124.7
+    density_stitches_per_mm2: 1.322954978174197
+    coverage_ratio: 0.9792714381646653
+    angle_histogram_deg:
+    - 1963
+    - 2164
+    - 2026
+    - 2495
+    - 2191
+    - 1929
+    - 2216
+    - 2163
+    - 2113
+    - 2540
+    - 2148
+    - 2223
+    classification:
+      type: tatami
+      confidence: 0.75
+      reason: 'Fill pattern: density 1.32, multi-directional (12 bins) with shorter
+        stitches (2.10 mm).'
+    summary: Layer 2 [tatami] 26199 sts, avg 2.10 mm, 1.32 pts/mm^2, coverage 0.98
+  - color: 3
+    stitch_count: 8066
+    path_length_mm: 14066.079602699892
+    avg_stitch_length_mm: 1.7519092792004018
+    std_stitch_length_mm: 0.818397151375352
+    hull_area_mm2: 19890.790000000005
+    bounds:
+      minx: 0.0
+      miny: 0.0
+      maxx: 162.20000000000002
+      maxy: 124.60000000000001
+    density_stitches_per_mm2: 0.4055143108946401
+    coverage_ratio: 0.984199500052449
+    angle_histogram_deg:
+    - 629
+    - 662
+    - 591
+    - 725
+    - 631
+    - 610
+    - 775
+    - 653
+    - 627
+    - 774
+    - 627
+    - 725
+    classification:
+      type: unknown
+      confidence: 0.3
+      reason: Metrics outside heuristics (density 0.41, avg 1.75 mm, bins 12, alignment
+        0.10).
+    summary: Layer 3 [unknown] 8066 sts, avg 1.75 mm, 0.41 pts/mm^2, coverage 0.98
+  layer_classification_summary:
+    tatami: 2
+    unknown: 1
+notes:
+- Derived automatically from DST data.
+- Parameters estimated via pyembroidery + numpy pipeline.
+examples:
+- items/damsco_floreale_punto_mattezzo_con_base_per_appiattimento_filo_effetto_vintage/preview.png
+- items/damsco_floreale_punto_mattezzo_con_base_per_appiattimento_filo_effetto_vintage/stitch_ir.json
+label: DAMSCO FLOREALE - PUNTO MATTEZZO CON BASE PER APPIATTIMENTO FILO -  EFFETTO
+  VINTAGE
+description: DAMSCO FLOREALE - PUNTO MATTEZZO CON BASE PER APPIATTIMENTO FILO -  EFFETTO
+  VINTAGE
+source_assets:
+  artwork: items/damsco_floreale_punto_mattezzo_con_base_per_appiattimento_filo_effetto_vintage/artwork.jpg
