@@ -22,6 +22,9 @@ let colorDownloadUrls = [];
 let monoDownloadUrl = null;
 let multiDownloadUrl = null;
 let presetDownloadUrl = null;
+let lastPreviewCacheKey = null;
+let liveProgressStop = null;
+let selectedPreviewColor = null;
 
 function canUseLocalBackend() {
   return (
@@ -361,9 +364,39 @@ function renderPreview(result) {
 
   previewColorsEl.innerHTML = "";
   const fragment = document.createDocumentFragment();
+  selectedPreviewColor = null;
+
+  const allCard = document.createElement("div");
+  allCard.className = "preview-color-card selected";
+  allCard.dataset.color = "";
+  const allMask = document.createElement("div");
+  allMask.className = "preview-color-mask";
+  allMask.style.cursor = "default";
+  allCard.appendChild(allMask);
+  const allMeta = document.createElement("div");
+  allMeta.className = "preview-color-meta";
+  const allTitle = document.createElement("strong");
+  allTitle.textContent = "Tutti i colori";
+  allMeta.appendChild(allTitle);
+  const allDetails = document.createElement("span");
+  allDetails.textContent = "SVG completo";
+  allMeta.appendChild(allDetails);
+  const allActions = document.createElement("div");
+  allActions.className = "preview-color-actions";
+  const allButton = document.createElement("button");
+  allButton.type = "button";
+  allButton.className = "btn-secondary";
+  allButton.dataset.selectColor = "";
+  allButton.textContent = "Usa tutti";
+  allActions.appendChild(allButton);
+  allMeta.appendChild(allActions);
+  allCard.appendChild(allMeta);
+  fragment.appendChild(allCard);
+
   (result.colors || []).forEach((info) => {
     const card = document.createElement("div");
     card.className = "preview-color-card";
+    card.dataset.color = info.color || "#000000";
 
     const mask = document.createElement("img");
     mask.className = "preview-color-mask";
@@ -389,10 +422,35 @@ function renderPreview(result) {
     details.textContent =
       `${info.pixel_count} px - ${Number(info.area_pct || 0).toFixed(2)}%`;
     meta.appendChild(details);
+    const actions = document.createElement("div");
+    actions.className = "preview-color-actions";
+    const selectButton = document.createElement("button");
+    selectButton.type = "button";
+    selectButton.className = "btn-secondary";
+    selectButton.dataset.selectColor = info.color || "#000000";
+    selectButton.textContent = "Solo SVG";
+    actions.appendChild(selectButton);
+    meta.appendChild(actions);
     card.appendChild(meta);
     fragment.appendChild(card);
   });
   previewColorsEl.appendChild(fragment);
+}
+
+function selectPreviewColor(color) {
+  selectedPreviewColor = color || null;
+  if (!previewColorsEl) {
+    return;
+  }
+  previewColorsEl.querySelectorAll(".preview-color-card").forEach((card) => {
+    const cardColor = card.dataset.color || "";
+    card.classList.toggle("selected", cardColor === (selectedPreviewColor || ""));
+  });
+  if (statusEl) {
+    statusEl.innerText = selectedPreviewColor
+      ? `Colore selezionato per SVG: ${selectedPreviewColor}`
+      : "Generazione SVG impostata su tutti i colori.";
+  }
 }
 
 function openLightbox(src, alt = "Preview ingrandita") {
@@ -414,8 +472,79 @@ function closeLightbox() {
   lightboxImageEl.removeAttribute("src");
 }
 
+function createJobId() {
+  if (window.crypto && typeof window.crypto.randomUUID === "function") {
+    return window.crypto.randomUUID();
+  }
+  return `job-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function formatDuration(seconds) {
+  const total = Math.max(0, Math.round(Number(seconds) || 0));
+  const minutes = Math.floor(total / 60);
+  const secs = total % 60;
+  return minutes > 0 ? `${minutes}m ${secs}s` : `${secs}s`;
+}
+
+function parseProgressParts(text) {
+  if (!String(text).startsWith("__PROGRESS__|")) {
+    return null;
+  }
+  const parts = String(text).split("|");
+  return {
+    pct: parts.length > 1 ? parseFloat(parts[1]) : 0,
+    label: parts.length > 2 ? parts.slice(2).join("|") : "",
+  };
+}
+
+function startLocalProgressPolling(jobId, pushStatus) {
+  if (!jobId) {
+    return () => {};
+  }
+  let lastMessageCount = 0;
+  const startedAt = Date.now();
+  let stopped = false;
+
+  async function tick() {
+    if (stopped) {
+      return;
+    }
+    try {
+      const result = await fetch(`/progress?job_id=${encodeURIComponent(jobId)}`)
+        .then((res) => res.json());
+      const messages = Array.isArray(result.messages) ? result.messages : [];
+      messages.slice(lastMessageCount).forEach((msg) => {
+        parseProgressMessage(String(msg), pushStatus);
+      });
+      lastMessageCount = messages.length;
+
+      const pct = Number(result.progress_percent || 0);
+      if (pct > 0 && pct < 100) {
+        const elapsed = (Date.now() - startedAt) / 1000;
+        const eta = elapsed * (100 / pct - 1);
+        const label = result.progress_label || "Elaborazione";
+        setProgress(pct, `${label} - ETA ${formatDuration(eta)}`);
+      }
+      if (result.done) {
+        stopped = true;
+        clearInterval(intervalId);
+      }
+    } catch (_) {
+      // La fetch principale gestira eventuali errori del backend.
+    }
+  }
+
+  const intervalId = setInterval(tick, 1000);
+  tick();
+  return () => {
+    stopped = true;
+    clearInterval(intervalId);
+  };
+}
+
 async function handlePreview() {
   console.log("Analizza preview premuto");
+  lastPreviewCacheKey = null;
   const statusHistory = [];
   const pushStatus = (msg) => {
     statusHistory.push(msg);
@@ -440,6 +569,7 @@ async function handlePreview() {
     const result = canUseLocalBackend()
       ? await runPreviewWithLocalBackend(imageBytes, options, pushStatus)
       : await runPreviewWithPyodide(imageBytes, options, pushStatus);
+    lastPreviewCacheKey = result.preview_cache_key || null;
     renderPreview(result);
     setProgress(100, "Preview pronta");
     pushStatus(
@@ -455,11 +585,24 @@ async function handlePreview() {
 
 async function handleConvert() {
   console.log("Genera SVG premuto");
+  if (liveProgressStop) {
+    liveProgressStop();
+    liveProgressStop = null;
+  }
   resetPrimaryDownloads();
   resetColorDownloads();
   const statusHistory = [];
+  const seenStatus = new Set();
   const pushStatus = (msg) => {
-    statusHistory.push(msg);
+    const text = String(msg || "");
+    if (!text || seenStatus.has(text)) {
+      return;
+    }
+    seenStatus.add(text);
+    statusHistory.push(text);
+    if (statusHistory.length > 140) {
+      statusHistory.splice(0, statusHistory.length - 140);
+    }
     statusEl.innerText = statusHistory.join("\n");
   };
   setProgress(0, "In attesa");
@@ -476,13 +619,32 @@ async function handleConvert() {
   const arrayBuffer = await file.arrayBuffer();
   const imageBytes = new Uint8Array(arrayBuffer);
   const options = readOptions();
+  const runOptions = { ...options };
+  if (lastPreviewCacheKey) {
+    runOptions._preview_cache_key = lastPreviewCacheKey;
+  }
+  if (selectedPreviewColor) {
+    runOptions._only_color = selectedPreviewColor;
+  }
+  const useLocalBackend = canUseLocalBackend();
+  const jobId = useLocalBackend ? createJobId() : "";
+  if (jobId) {
+    runOptions._job_id = jobId;
+  }
 
   try {
     pushStatus("Elaborazione in corso...");
     setProgress(25, "Elaborazione");
-    const result = canUseLocalBackend()
-      ? await runWithLocalBackend(imageBytes, options, pushStatus)
-      : await runWithPyodide(imageBytes, options, pushStatus);
+    if (jobId) {
+      liveProgressStop = startLocalProgressPolling(jobId, pushStatus);
+    }
+    const result = useLocalBackend
+      ? await runWithLocalBackend(imageBytes, runOptions, pushStatus, !jobId)
+      : await runWithPyodide(imageBytes, runOptions, pushStatus);
+    if (liveProgressStop) {
+      liveProgressStop();
+      liveProgressStop = null;
+    }
 
     console.log("Result summary:", result.summary);
 
@@ -523,6 +685,10 @@ async function handleConvert() {
     setProgress(100, "Completato");
     pushStatus(summary);
   } catch (error) {
+    if (liveProgressStop) {
+      liveProgressStop();
+      liveProgressStop = null;
+    }
     console.error("Errore durante la conversione:", error);
     setProgress(100, "Errore");
     pushStatus(`Errore: ${error.message || error}`);
@@ -550,11 +716,9 @@ async function handlePresetLoad(event) {
 }
 
 function parseProgressMessage(text, pushStatus) {
-  if (text.startsWith("__PROGRESS__|")) {
-    const parts = text.split("|");
-    const pct = parts.length > 1 ? parseFloat(parts[1]) : 0;
-    const label = parts.length > 2 ? parts.slice(2).join("|") : "";
-    setProgress(pct, label);
+  const progress = parseProgressParts(text);
+  if (progress) {
+    setProgress(progress.pct, progress.label);
     return;
   }
   pushStatus(text);
@@ -570,7 +734,7 @@ function bytesToBase64(bytes) {
   return btoa(binary);
 }
 
-async function runWithLocalBackend(imageBytes, options, pushStatus) {
+async function runWithLocalBackend(imageBytes, options, pushStatus, replayLogs = true) {
   pushStatus("Uso motore Python locale...");
   let response;
   try {
@@ -603,7 +767,11 @@ async function runWithLocalBackend(imageBytes, options, pushStatus) {
       (result.error || "Conversione locale non riuscita.") + logPath
     );
   }
-  (result.logs || []).forEach((msg) => parseProgressMessage(String(msg), pushStatus));
+  if (replayLogs) {
+    (result.logs || []).forEach((msg) =>
+      parseProgressMessage(String(msg), pushStatus)
+    );
+  }
   return result;
 }
 
@@ -695,6 +863,10 @@ previewBtn.addEventListener("click", () => {
 if (previewPanelEl) {
   previewPanelEl.addEventListener("click", (event) => {
     const target = event.target;
+    if (target instanceof HTMLButtonElement && "selectColor" in target.dataset) {
+      selectPreviewColor(target.dataset.selectColor || "");
+      return;
+    }
     if (target instanceof HTMLImageElement && target.src) {
       openLightbox(target.src, target.alt || "Preview ingrandita");
     }

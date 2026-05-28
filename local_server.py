@@ -8,11 +8,12 @@ import os
 import sys
 import tempfile
 import threading
+import time
 import traceback
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import unquote
+from urllib.parse import parse_qs, unquote, urlparse
 
 
 if getattr(sys, "frozen", False):
@@ -51,12 +52,18 @@ def _select_log_dir():
 
 LOG_DIR = _select_log_dir()
 LOG_FILE = LOG_DIR / "app.log"
+PROGRESS_JOBS = {}
+PROGRESS_LOCK = threading.Lock()
+MAX_PROGRESS_MESSAGES = 300
 
 
 def log_event(message):
     stamp = _dt.datetime.now().isoformat(timespec="seconds")
     line = f"[{stamp}] {message}"
-    print(line)
+    try:
+        print(line)
+    except OSError:
+        pass
     with LOG_FILE.open("a", encoding="utf-8") as fh:
         fh.write(line + "\n")
 
@@ -79,14 +86,51 @@ def _json_response(handler, status, payload):
     handler.wfile.write(body)
 
 
+def _update_progress_job(job_id, **updates):
+    if not job_id:
+        return
+    with PROGRESS_LOCK:
+        job = PROGRESS_JOBS.setdefault(
+            job_id,
+            {
+                "job_id": job_id,
+                "started_at": time.time(),
+                "updated_at": time.time(),
+                "progress_percent": 0.0,
+                "progress_label": "",
+                "messages": [],
+                "done": False,
+                "error": "",
+            },
+        )
+        if "message" in updates:
+            job["messages"].append(str(updates.pop("message")))
+            if len(job["messages"]) > MAX_PROGRESS_MESSAGES:
+                job["messages"] = job["messages"][-MAX_PROGRESS_MESSAGES:]
+        job.update(updates)
+        job["updated_at"] = time.time()
+
+
+def _read_progress_job(job_id):
+    with PROGRESS_LOCK:
+        job = PROGRESS_JOBS.get(job_id)
+        if not job:
+            return None
+        payload = dict(job)
+        payload["messages"] = list(job.get("messages", []))
+        payload["elapsed_s"] = max(0.0, time.time() - float(job.get("started_at", time.time())))
+        return payload
+
+
 class LocalAppHandler(BaseHTTPRequestHandler):
-    server_version = "BitmapToStitchLocal/0.1.3"
+    server_version = "BitmapToStitchLocal/0.1.4"
 
     def log_message(self, fmt, *args):
         log_event("%s - %s" % (self.address_string(), fmt % args))
 
     def do_GET(self):
-        if self.path == "/health":
+        parsed = urlparse(self.path)
+        if parsed.path == "/health":
             _json_response(
                 self,
                 200,
@@ -94,7 +138,16 @@ class LocalAppHandler(BaseHTTPRequestHandler):
             )
             return
 
-        rel_path = unquote(self.path.split("?", 1)[0])
+        if parsed.path == "/progress":
+            query = parse_qs(parsed.query)
+            job_id = (query.get("job_id") or [""])[0]
+            payload = _read_progress_job(job_id)
+            if payload is None:
+                payload = {"job_id": job_id, "messages": [], "done": False}
+            _json_response(self, 200, payload)
+            return
+
+        rel_path = unquote(parsed.path)
         if rel_path in ("", "/"):
             rel_path = "/index.html"
 
@@ -142,7 +195,41 @@ class LocalAppHandler(BaseHTTPRequestHandler):
             )
             image_bytes = base64.b64decode(image_b64, validate=True)
             logs = []
-            pipeline_app.status_callback = lambda msg: logs.append(str(msg))
+            job_id = str(options.get("_job_id") or "") if not is_preview else ""
+            if job_id:
+                _update_progress_job(
+                    job_id,
+                    progress_percent=0.0,
+                    progress_label="Avvio conversione",
+                    done=False,
+                    error="",
+                    messages=[],
+                )
+
+            def capture_pipeline_status(msg):
+                text = str(msg)
+                logs.append(text)
+                progress_percent = None
+                progress_label = ""
+                if text.startswith("__PROGRESS__|"):
+                    parts = text.split("|")
+                    pct = parts[1] if len(parts) > 1 else "?"
+                    label = parts[2] if len(parts) > 2 else ""
+                    try:
+                        progress_percent = float(pct)
+                    except (TypeError, ValueError):
+                        progress_percent = None
+                    progress_label = label
+                    log_event(f"Pipeline progress: {pct}% {label}".rstrip())
+                else:
+                    log_event(f"Pipeline: {text}")
+                update = {"message": text}
+                if progress_percent is not None:
+                    update["progress_percent"] = progress_percent
+                    update["progress_label"] = progress_label
+                _update_progress_job(job_id, **update)
+
+            pipeline_app.status_callback = capture_pipeline_status
             try:
                 if is_preview:
                     result = pipeline_app.analyze_preview_browser(image_bytes, options)
@@ -159,6 +246,13 @@ class LocalAppHandler(BaseHTTPRequestHandler):
                     f"colors={len(result.get('colors', []))}"
                 )
             else:
+                _update_progress_job(
+                    job_id,
+                    progress_percent=100.0,
+                    progress_label="Conversione completata",
+                    done=True,
+                    message="Conversione completata.",
+                )
                 log_event(
                     "Conversione completata: "
                     f"svg_chars={len(result.get('svg', ''))}, "
@@ -167,6 +261,17 @@ class LocalAppHandler(BaseHTTPRequestHandler):
             _json_response(self, 200, result)
         except BaseException as exc:
             pipeline_app.status_callback = None
+            try:
+                options = locals().get("options", {})
+                job_id = str(options.get("_job_id") or "")
+                _update_progress_job(
+                    job_id,
+                    done=True,
+                    error=str(exc),
+                    message=f"Errore: {exc}",
+                )
+            except Exception:
+                pass
             log_event("Errore conversione:\n" + traceback.format_exc())
             _json_response(
                 self,
@@ -189,10 +294,14 @@ def run(port=DEFAULT_PORT, open_browser=True):
 
 
 if __name__ == "__main__":
-    selected_port = DEFAULT_PORT
-    should_open_browser = True
-    if len(sys.argv) > 1:
-        selected_port = int(sys.argv[1])
-    if "--no-browser" in sys.argv:
-        should_open_browser = False
-    run(selected_port, should_open_browser)
+    try:
+        selected_port = DEFAULT_PORT
+        should_open_browser = True
+        if len(sys.argv) > 1:
+            selected_port = int(sys.argv[1])
+        if "--no-browser" in sys.argv:
+            should_open_browser = False
+        run(selected_port, should_open_browser)
+    except BaseException:
+        log_event("Errore avvio server:\n" + traceback.format_exc())
+        raise

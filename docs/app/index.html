@@ -286,6 +286,10 @@
         border-radius: 0.4rem;
         padding: 0.4rem;
       }
+      .preview-color-card.selected {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 1px var(--accent);
+      }
       .preview-color-mask {
         width: 52px;
         height: 52px;
@@ -308,6 +312,18 @@
         align-items: center;
         gap: 0.45rem;
         color: #1f2c3d;
+      }
+      .preview-color-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem;
+        margin-top: 0.2rem;
+      }
+      .preview-color-actions button {
+        min-height: 1.7rem;
+        padding: 0.25rem 0.45rem;
+        border-radius: 0.3rem;
+        font-size: 0.76rem;
       }
       #status {
         min-height: 4rem;
@@ -532,11 +548,11 @@
             <input type="number" id="max-width" min="0" value="0" />
           </div>
           <div class="control">
-            <label for="threshold">Soglia (0-255) <span class="info-tip" tabindex="0" data-tip="Decide quali pixel considerare validi: piu alta include piu aree scure.">i</span></label>
+            <label for="threshold">Soglia (0-255) <span class="info-tip" tabindex="0" data-tip="Decide quali pixel considerare validi: 255 include anche il bianco puro, salvo sfondo escluso.">i</span></label>
             <input type="number" id="threshold" min="0" max="255" value="200" />
           </div>
           <div class="control">
-            <label for="sample-colors">Sample colors <span class="info-tip" tabindex="0" data-tip="Lista colori da campionare (es. #000000,#FF0000). Vengono aggiunti alla selezione basata su soglia.">i</span></label>
+            <label for="sample-colors">Sample colors <span class="info-tip" tabindex="0" data-tip="Lista colori da campionare (es. #000000,#FFFFFF). Vengono aggiunti alla selezione e hanno priorita sullo sfondo escluso.">i</span></label>
             <input type="text" id="sample-colors" placeholder="#000000,#FF0000" />
           </div>
           <div class="control">
@@ -546,7 +562,7 @@
           <div class="control">
             <label for="exclude-background">
               <input type="checkbox" id="exclude-background" checked />
-              Escludi sfondo <span class="info-tip" tabindex="0" data-tip="Se attivo, i colori indicati come sfondo vengono rimossi dalla selezione. Disattivalo se vuoi ricamare il bianco.">i</span>
+              Escludi sfondo <span class="info-tip" tabindex="0" data-tip="Se attivo, i colori indicati come sfondo vengono rimossi. I colori inseriti in Sample colors restano selezionati.">i</span>
             </label>
           </div>
           <div class="control">

@@ -1,12 +1,60 @@
 import base64
+import hashlib
 import io
+import json
 import math
+from collections import OrderedDict
 
 import numpy as np
 from PIL import Image
 
 
 status_callback = None
+preview_cache = OrderedDict()
+MAX_PREVIEW_CACHE_ENTRIES = 4
+
+
+def normalize_analysis_options(opts):
+    try:
+        analysis_cell_mm = float(opts.get("analysis_cell_mm", 0.0) or 0.0)
+    except (TypeError, ValueError):
+        analysis_cell_mm = 0.0
+    requested_analysis_cell_mm = analysis_cell_mm
+    if 0.0 < analysis_cell_mm < 1.0:
+        analysis_cell_mm = 1.0
+    opts["analysis_cell_mm"] = analysis_cell_mm
+    return requested_analysis_cell_mm, analysis_cell_mm
+
+
+def jsonable_value(value):
+    if isinstance(value, dict):
+        return {str(k): jsonable_value(v) for k, v in sorted(value.items())}
+    if isinstance(value, (list, tuple)):
+        return [jsonable_value(v) for v in value]
+    if isinstance(value, np.generic):
+        return value.item()
+    return value
+
+
+def make_preview_cache_key(image_bytes, opts):
+    clean_opts = {
+        str(k): jsonable_value(v)
+        for k, v in opts.items()
+        if not str(k).startswith("_")
+    }
+    payload = {
+        "image_sha256": hashlib.sha256(bytes(image_bytes)).hexdigest(),
+        "options": clean_opts,
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def store_preview_cache(cache_key, payload):
+    preview_cache[cache_key] = payload
+    preview_cache.move_to_end(cache_key)
+    while len(preview_cache) > MAX_PREVIEW_CACHE_ENTRIES:
+        preview_cache.popitem(last=False)
 
 
 def extract_source_dpi(image_info):
@@ -56,6 +104,11 @@ def parse_hex_color(color_text):
     except ValueError as exc:
         raise ValueError(f"Colore non valido: {color_text}") from exc
     return (r, g, b)
+
+
+def normalize_hex_color(color_text):
+    r, g, b = parse_hex_color(color_text)
+    return f"#{r:02X}{g:02X}{b:02X}"
 
 
 def parse_sample_colors(raw_value):
@@ -477,6 +530,8 @@ def prepare_points_before_ordering(
 def analyze_preview(image_bytes, opts):
     if not isinstance(image_bytes, (bytes, bytearray)):
         image_bytes = bytes(image_bytes)
+    normalize_analysis_options(opts)
+    cache_key = make_preview_cache_key(image_bytes, opts)
 
     max_width = opts["max_width"] if opts["max_width"] > 0 else None
     color_count = max(1, int(opts.get("color_count", 1)))
@@ -506,13 +561,21 @@ def analyze_preview(image_bytes, opts):
 
     rgb_arr = np.array(img.convert("RGB"))
     luminance = np.array(img.convert("L"))
-    mask = luminance < int(opts["threshold"])
+    sample_mask = (
+        build_color_match_mask(rgb_arr, sample_colors, sample_tolerance)
+        if sample_colors
+        else None
+    )
+    mask = luminance <= int(opts["threshold"])
     if sample_colors:
-        mask |= build_color_match_mask(rgb_arr, sample_colors, sample_tolerance)
+        mask |= sample_mask
     if exclude_background and background_colors:
-        mask &= ~build_color_match_mask(
+        background_mask = build_color_match_mask(
             rgb_arr, background_colors, background_tolerance
         )
+        if sample_mask is not None:
+            background_mask &= ~sample_mask
+        mask &= ~background_mask
     if "A" in img.getbands():
         alpha = np.array(img.getchannel("A"))
         mask &= alpha > 0
@@ -575,7 +638,22 @@ def analyze_preview(image_bytes, opts):
             if total_pixels
             else 0.0,
             "colors": colors,
+            "preview_cache_key": cache_key,
         }
+    )
+    store_preview_cache(
+        cache_key,
+        {
+            "prepared_color_points": preview_point_groups,
+            "raw_point_counts": {
+                color_hex: len(points) for color_hex, points in color_points.items()
+            },
+            "size": img.size,
+            "source_dpi": effective_dpi,
+            "budget_info": budget_info,
+            "per_color_max": per_color_max,
+            "color_count": color_count,
+        },
     )
     return preview
 
@@ -625,14 +703,22 @@ def load_points_grouped_from_bytes(
 
     rgb_arr = np.array(img.convert("RGB"))
     luminance = np.array(img.convert("L"))
-    mask = luminance < int(threshold)
+    sample_mask = (
+        build_color_match_mask(rgb_arr, sample_colors, sample_tolerance)
+        if sample_colors
+        else None
+    )
+    mask = luminance <= int(threshold)
     if sample_colors:
         # I colori campionati si aggiungono alla selezione base, non la sostituiscono.
-        mask |= build_color_match_mask(rgb_arr, sample_colors, sample_tolerance)
+        mask |= sample_mask
     if exclude_background and background_colors:
-        mask &= ~build_color_match_mask(
+        background_mask = build_color_match_mask(
             rgb_arr, background_colors, background_tolerance
         )
+        if sample_mask is not None:
+            background_mask &= ~sample_mask
+        mask &= ~background_mask
     if "A" in img.getbands():
         alpha = np.array(img.getchannel("A"))
         mask &= alpha > 0
@@ -771,6 +857,11 @@ def order_points_nearest_neighbor(points):
     n = len(points)
     if n == 0:
         return []
+    report_every = max(1000, n // 20)
+    if n >= 5000:
+        emit_status(
+            f"Nearest neighbor: ordino {n} punti (fase pesante, puo richiedere tempo)."
+        )
     used = [False] * n
     ordered = []
     start_idx = 0
@@ -782,7 +873,7 @@ def order_points_nearest_neighbor(points):
     current_idx = start_idx
     used[current_idx] = True
     ordered.append(points[current_idx])
-    for _ in range(1, n):
+    for step in range(1, n):
         cx, cy = points[current_idx]
         best_idx = None
         best_d2 = None
@@ -800,6 +891,8 @@ def order_points_nearest_neighbor(points):
         used[best_idx] = True
         ordered.append(points[best_idx])
         current_idx = best_idx
+        if n >= 5000 and (step % report_every == 0 or step == n - 1):
+            emit_status(f"Nearest neighbor: {step + 1}/{n} punti ordinati")
     return ordered
 
 
@@ -871,11 +964,15 @@ def apply_random_degrade_effects(
 def filter_with_min_dist_and_standby(points, min_dist_px):
     if not points or min_dist_px <= 0:
         return points[:], []
+    total = len(points)
+    report_every = max(1000, total // 20)
+    if total >= 5000:
+        emit_status(f"Filtro min-dist: controllo {total} punti")
     path_filtered = [points[0]]
     standby = []
     last_x, last_y = points[0]
     min2 = min_dist_px * min_dist_px
-    for (x, y) in points[1:]:
+    for idx, (x, y) in enumerate(points[1:], start=2):
         dx = x - last_x
         dy = y - last_y
         d2 = dx * dx + dy * dy
@@ -884,6 +981,8 @@ def filter_with_min_dist_and_standby(points, min_dist_px):
             last_x, last_y = x, y
         else:
             standby.append((x, y))
+        if total >= 5000 and (idx % report_every == 0 or idx == total):
+            emit_status(f"Filtro min-dist: {idx}/{total} punti controllati")
     return path_filtered, standby
 
 
@@ -926,7 +1025,11 @@ def try_reinsert_points(path, standby, min_dist_px):
             )
             return new_len - old_len
 
-    for s in standby:
+    total_standby = len(standby)
+    report_every = max(250, total_standby // 20)
+    if total_standby >= 1000:
+        emit_status(f"Reinserimento: provo {total_standby} punti standby")
+    for idx, s in enumerate(standby, start=1):
         best_pos = None
         best_extra = None
         if len(new_path) == 1:
@@ -953,6 +1056,10 @@ def try_reinsert_points(path, standby, min_dist_px):
             new_path.insert(best_pos, s)
         else:
             still_leftover.append(s)
+        if total_standby >= 1000 and (
+            idx % report_every == 0 or idx == total_standby
+        ):
+            emit_status(f"Reinserimento: {idx}/{total_standby} punti valutati")
     return new_path, still_leftover
 
 
@@ -1058,9 +1165,15 @@ def process_color_points(
     color_idx=0,
     seed_base=None,
     max_points_for_color=0,
+    preprocessed=False,
+    initial_points_override=None,
 ):
     working = points[:]
-    initial_points = len(working)
+    initial_points = (
+        int(initial_points_override)
+        if initial_points_override is not None
+        else len(working)
+    )
     emit_status(f"{color_hex}: punti iniziali={initial_points}")
 
     if not working:
@@ -1083,17 +1196,22 @@ def process_color_points(
         else:
             min_dist_px = opts["min_dist"] * (dpi_for_mm / 25.4)
 
-    working = prepare_points_before_ordering(
-        working,
-        opts,
-        image_size,
-        effective_dpi,
-        color_hex,
-        color_idx=color_idx,
-        seed_base=seed_base,
-        max_points_for_color=max_points_for_color,
-        report=True,
-    )
+    if preprocessed:
+        emit_status(
+            f"{color_hex}: riuso punti gia preparati dalla preview ({len(working)})"
+        )
+    else:
+        working = prepare_points_before_ordering(
+            working,
+            opts,
+            image_size,
+            effective_dpi,
+            color_hex,
+            color_idx=color_idx,
+            seed_base=seed_base,
+            max_points_for_color=max_points_for_color,
+            report=True,
+        )
 
     if not working:
         return {
@@ -1105,13 +1223,16 @@ def process_color_points(
         }
 
     if opts["ordering"] == "scanline":
+        emit_status(f"{color_hex}: ordino punti in scanline ({len(working)} punti)")
         ordered = order_points_scanline(
             working,
             band_height=opts["scanline_band"],
             serpentine=opts["serpentine"],
         )
     else:
+        emit_status(f"{color_hex}: ordino punti nearest ({len(working)} punti)")
         ordered = order_points_nearest_neighbor(working)
+    emit_status(f"{color_hex}: ordinamento completato ({len(ordered)} punti)")
 
     final_path = ordered
     discarded = []
@@ -1142,18 +1263,15 @@ def process_color_points(
 
 
 def run_pipeline(image_bytes, opts):
+    if not isinstance(image_bytes, (bytes, bytearray)):
+        image_bytes = bytes(image_bytes)
     emit_progress(22, "Avvio pipeline")
     emit_status("=== Inizio nuova conversione ===")
-    try:
-        analysis_cell_mm = float(opts.get("analysis_cell_mm", 0.0) or 0.0)
-    except (TypeError, ValueError):
-        analysis_cell_mm = 0.0
-    if 0.0 < analysis_cell_mm < 1.0:
+    requested_analysis_cell_mm, analysis_cell_mm = normalize_analysis_options(opts)
+    if 0.0 < requested_analysis_cell_mm < 1.0:
         emit_status(
-            f"analysis-cell impostato a {analysis_cell_mm:.2f} mm: applico minimo 1.00 mm."
+            f"analysis-cell impostato a {requested_analysis_cell_mm:.2f} mm: applico minimo 1.00 mm."
         )
-        analysis_cell_mm = 1.0
-    opts["analysis_cell_mm"] = analysis_cell_mm
 
     max_width = opts["max_width"] if opts["max_width"] > 0 else None
     color_count = max(1, int(opts.get("color_count", 1)))
@@ -1162,21 +1280,59 @@ def run_pipeline(image_bytes, opts):
     exclude_background = bool(opts.get("exclude_background", False))
     background_colors = parse_sample_colors(opts.get("background_colors", ""))
     background_tolerance = float(opts.get("background_tolerance", 0.0) or 0.0)
-    color_points, size, source_dpi = load_points_grouped_from_bytes(
-        image_bytes,
-        max_width=max_width,
-        threshold=opts["threshold"],
-        color_count=color_count,
-        sample_colors=sample_colors if sample_colors else None,
-        sample_tolerance=sample_tolerance,
-        exclude_background=exclude_background,
-        background_colors=background_colors if background_colors else None,
-        background_tolerance=background_tolerance,
+    requested_cache_key = opts.get("_preview_cache_key")
+    expected_cache_key = make_preview_cache_key(image_bytes, opts)
+    cached_preview = (
+        preview_cache.get(requested_cache_key)
+        if requested_cache_key == expected_cache_key
+        else None
     )
+    using_preview_cache = cached_preview is not None
+
+    if using_preview_cache:
+        preview_cache.move_to_end(requested_cache_key)
+        color_points = cached_preview["prepared_color_points"]
+        size = cached_preview["size"]
+        source_dpi = cached_preview["source_dpi"]
+        raw_point_counts = cached_preview["raw_point_counts"]
+        budget_info = cached_preview["budget_info"]
+        per_color_max = cached_preview["per_color_max"]
+        emit_status("Uso dati gia calcolati dalla preview.")
+    else:
+        color_points, size, source_dpi = load_points_grouped_from_bytes(
+            image_bytes,
+            max_width=max_width,
+            threshold=opts["threshold"],
+            color_count=color_count,
+            sample_colors=sample_colors if sample_colors else None,
+            sample_tolerance=sample_tolerance,
+            exclude_background=exclude_background,
+            background_colors=background_colors if background_colors else None,
+            background_tolerance=background_tolerance,
+        )
+        raw_point_counts = {color_hex: len(points) for color_hex, points in color_points.items()}
+        budget_info = resolve_global_point_budget(
+            color_points,
+            opts.get("max_points", 0),
+            opts.get("target_density", 0.0),
+        )
+        per_color_max = allocate_max_points_by_color(color_points, budget_info["budget"])
     if not color_points:
         raise ValueError(
             "Nessun pixel utile trovato con la soglia/colori correnti. Prova ad abbassare la soglia o aumentare i colori."
         )
+    only_color = str(opts.get("_only_color") or "").strip()
+    if only_color:
+        only_color = normalize_hex_color(only_color)
+        if only_color not in color_points:
+            available = ", ".join(sorted(color_points.keys()))
+            raise ValueError(
+                f"Colore richiesto {only_color} non trovato nella preview. Colori disponibili: {available}"
+            )
+        color_points = {only_color: color_points[only_color]}
+        raw_point_counts = {only_color: raw_point_counts.get(only_color, len(color_points[only_color]))}
+        per_color_max = {only_color: per_color_max.get(only_color, 0)}
+        emit_status(f"Filtro colore attivo: genero solo {only_color}.")
     emit_progress(35, "Bitmap analizzata")
 
     emit_status(f"Colori trovati: {len(color_points)} (richiesti {color_count})")
@@ -1201,13 +1357,7 @@ def run_pipeline(image_bytes, opts):
             except (TypeError, ValueError):
                 base_seed = None
 
-    budget_info = resolve_global_point_budget(
-        color_points,
-        opts.get("max_points", 0),
-        opts.get("target_density", 0.0),
-    )
     global_max_points = budget_info["budget"]
-    per_color_max = allocate_max_points_by_color(color_points, global_max_points)
     if global_max_points > 0:
         total_allocated = sum(per_color_max.values())
         if budget_info["mode"] == "density":
@@ -1239,6 +1389,8 @@ def run_pipeline(image_bytes, opts):
             color_idx=idx,
             seed_base=base_seed,
             max_points_for_color=per_color_max.get(color_hex, 0),
+            preprocessed=using_preview_cache,
+            initial_points_override=raw_point_counts.get(color_hex),
         )
         color_results.append(result)
         progress_span = 45.0
